@@ -1175,8 +1175,18 @@ function handleTap(x, y) {
         // ⑤ 卡片淡出后，打字机真心话
         setTimeout(() => playWonderText(), 7200);
         setTimeout(() => hideWonderText(), 12700);
-        // ⑥ 再进入下一幕
-        setTimeout(() => goNextScene(), 13600);
+        // ⑥ 蛋糕流程走完 → 之后全部自动播放，不再需要任何点击
+        setTimeout(() => {
+          finished = true;            // 进入自动循环模式
+          hintShown = false;
+          scenePending = false;
+          blasted = false;
+          hideAllOverlays();          // 清掉所有浮层与提示
+          shapeIndex = (shapeIndex + 1) % SHAPES.length;
+          lastShapeAt = nowEt;
+          morphTo(shapeIndex, true);
+          volley();
+        }, 13600);
       }, WISH_SECONDS);
     } else {
       goNextScene();
