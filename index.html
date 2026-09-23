@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<title>生日快乐 🎂</title>
+<title>✨ 有份小惊喜</title>
 <style>
   * { margin:0; padding:0; box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
   html, body {
@@ -1933,6 +1933,8 @@ function boot() {
    🔒 时间锁：9 月 25 日之前只显示神秘倒计时
    （自己预览时可在网址后加 ?preview=1 跳过锁）
    ══════════════════════════════════════════════════════════════ */
+const LOCK_TITLE = '✨ 有份小惊喜';                    // 锁定期间的标签页标题（不剧透）
+const REAL_TITLE = '🎂 生日快乐 🎂';                   // 解锁后的标题
 const UNLOCK_DATE = new Date('2026-09-25T00:00:00');   // 解锁时间
 const PREVIEW_MODE = new URLSearchParams(location.search).has('preview');
 const lockEl = document.getElementById('lock');
@@ -1948,6 +1950,7 @@ function unlockNow() {
   lockEl.classList.add('hide');
   setTimeout(() => { lockEl.style.display = 'none'; }, 950);
   // 解锁后展示引导层，由她点击进入
+  document.title = REAL_TITLE;
   gateEl.style.display = 'flex';
   gateEl.classList.remove('hide');
 }
@@ -1971,11 +1974,13 @@ function startLockCountdown() {
 
 if (Date.now() < UNLOCK_DATE.getTime() && !PREVIEW_MODE) {
   // 未到时间 → 上锁（背景粒子继续流动，透过毛玻璃隐约可见，保持神秘）
+  document.title = LOCK_TITLE;
   gateEl.style.display = 'none';
   lockEl.style.display = 'flex';
   boot();
   startLockCountdown();
 } else {
+  document.title = REAL_TITLE;
   lockEl.style.display = 'none';
   boot();
 }
