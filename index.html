@@ -57,6 +57,64 @@
     font-size:11px; letter-spacing:1.5px; color:rgba(255,255,255,.2);
     pointer-events:none; user-select:none;
   }
+
+  /* 音乐控制按钮 */
+  .music-btn {
+    position:fixed; right:22px; bottom:22px; z-index:20;
+    width:52px; height:52px; border-radius:50%;
+    border:1px solid rgba(255,190,220,.35);
+    background:rgba(30,16,40,.55);
+    backdrop-filter:blur(10px);
+    color:#ffd6e8; font-size:21px; cursor:pointer;
+    display:flex; align-items:center; justify-content:center;
+    box-shadow:0 0 22px rgba(255,107,157,.28), inset 0 0 14px rgba(255,140,190,.12);
+    transition:all .25s ease;
+    animation:btnPulse 2.8s ease-in-out infinite;
+  }
+  .music-btn:hover {
+    transform:scale(1.1);
+    border-color:rgba(255,190,220,.75);
+    box-shadow:0 0 34px rgba(255,107,157,.55);
+  }
+  .music-btn.playing {
+    border-color:rgba(255,214,168,.6);
+    box-shadow:0 0 30px rgba(255,205,130,.5);
+  }
+  .music-btn .ring {
+    position:absolute; inset:-6px; border-radius:50%;
+    border:1px solid rgba(255,140,190,.35);
+    opacity:0;
+  }
+  .music-btn.playing .ring {
+    animation:ripple 1.9s ease-out infinite;
+  }
+  @keyframes ripple {
+    0%   { transform:scale(.85); opacity:.7; }
+    100% { transform:scale(1.5);  opacity:0; }
+  }
+  @keyframes btnPulse {
+    0%,100% { box-shadow:0 0 20px rgba(255,107,157,.25), inset 0 0 12px rgba(255,140,190,.1); }
+    50%     { box-shadow:0 0 32px rgba(255,107,157,.45), inset 0 0 18px rgba(255,140,190,.18); }
+  }
+
+  /* 听原曲按钮 */
+  .song-link {
+    margin-top:16px; pointer-events:auto;
+    display:inline-flex; align-items:center; gap:8px;
+    padding:9px 20px; border-radius:999px;
+    border:1px solid rgba(255,190,220,.32);
+    background:rgba(30,16,40,.5);
+    backdrop-filter:blur(8px);
+    color:#ffd6e8; text-decoration:none;
+    font-size:13px; letter-spacing:1px;
+    transition:all .25s ease;
+    box-shadow:0 0 18px rgba(255,107,157,.18);
+  }
+  .song-link:hover {
+    border-color:rgba(255,190,220,.75);
+    box-shadow:0 0 28px rgba(255,107,157,.45);
+    transform:translateY(-1px);
+  }
   .vignette {
     position:fixed; inset:0; pointer-events:none;
     background:radial-gradient(ellipse at 50% 45%, rgba(0,0,0,0) 42%, rgba(0,0,0,.55) 100%);
@@ -68,10 +126,19 @@
 <div class="vignette"></div>
 
 <div class="overlay">
-  <div class="title" id="title">🎂 9 · 25 生日快乐 🎂</div>
+  <div class="title" id="title">🎂 生日快乐 🎂</div>
   <div class="subtitle" id="subtitle"></div>
+  <a class="song-link" id="songLink" href="https://music.163.com/#/search/m/?s=%E6%9C%80%E4%BD%B3%E6%8D%9F%E5%8F%8B%20%E9%99%88%E5%A5%95%E8%BF%85" target="_blank" rel="noopener">
+    🎵 点这里听《最佳损友》· 陈奕迅
+  </a>
 </div>
-<div class="hint">点击任意处绽放烟花 · 移动鼠标拨动星尘</div>
+
+<button class="music-btn" id="musicBtn" title="背景音乐开关">
+  <span class="ring"></span>
+  <span id="musicIcon">🔈</span>
+</button>
+
+<div class="hint">点击任意处绽放烟花 · 移动鼠标拨动星尘 · 右下角开启音乐</div>
 
 <script>
 /* ══════════════════════════════════════════════════════════════
@@ -689,6 +756,146 @@ function frame(t) {
 
   requestAnimationFrame(frame);
 }
+
+/* ══════════════════════════════════════════════════════════════
+   🎵 背景音乐（Web Audio 实时合成 · 原创温馨旋律，无需音频文件）
+   ══════════════════════════════════════════════════════════════ */
+const musicBtn = document.getElementById('musicBtn');
+const musicIcon = document.getElementById('musicIcon');
+
+let actx = null;
+let masterGain = null;
+let musicTimer = null;
+let musicOn = false;
+let mStep = 0;
+let nextNoteTime = 0;
+let autoMusicTried = false;
+
+// 原创和弦进行（C - G - Am - F，经典温馨走向）
+const PROG = [
+  { bass: 130.81, arp: [261.63, 329.63, 392.00, 523.25] }, // C
+  { bass: 196.00, arp: [293.66, 392.00, 493.88, 587.33] }, // G
+  { bass: 220.00, arp: [261.63, 329.63, 440.00, 523.25] }, // Am
+  { bass: 174.61, arp: [261.63, 349.23, 440.00, 523.25] }, // F
+];
+const STEP_TIME = 0.6;   // 每拍时长（秒）→ 舒缓节奏
+
+function buildAudio() {
+  const AC = window.AudioContext || window.webkitAudioContext;
+  if (!AC) return false;
+  actx = new AC();
+
+  masterGain = actx.createGain();
+  masterGain.gain.value = 0;
+  masterGain.connect(actx.destination);
+
+  // 简易混响（延迟反馈）
+  const delay = actx.createDelay(1.2);
+  delay.delayTime.value = 0.3;
+  const fb = actx.createGain();
+  fb.gain.value = 0.34;
+  const wet = actx.createGain();
+  wet.gain.value = 0.42;
+  masterGain.connect(delay);
+  delay.connect(fb);
+  fb.connect(delay);
+  delay.connect(wet);
+  wet.connect(actx.destination);
+  return true;
+}
+
+// 音乐盒音色：基音 + 泛音
+function note(freq, when, dur, vol) {
+  const partials = [
+    [1, vol],
+    [2, vol * 0.26],
+    [3, vol * 0.1],
+    [4.2, vol * 0.045],
+  ];
+  for (const [mult, v] of partials) {
+    if (v < 0.004) continue;
+    const osc = actx.createOscillator();
+    const g = actx.createGain();
+    osc.type = 'sine';
+    osc.frequency.value = freq * mult;
+    g.gain.setValueAtTime(0, when);
+    g.gain.linearRampToValueAtTime(v, when + 0.012);
+    g.gain.exponentialRampToValueAtTime(0.0001, when + dur);
+    osc.connect(g);
+    g.connect(masterGain);
+    osc.start(when);
+    osc.stop(when + dur + 0.08);
+  }
+}
+
+function scheduler() {
+  if (!actx || !musicOn) return;
+  while (nextNoteTime < actx.currentTime + 0.9) {
+    const chord = PROG[Math.floor(mStep / 4) % PROG.length];
+    const pos = mStep % 4;
+
+    if (pos === 0) {
+      note(chord.bass, nextNoteTime, 2.6, 0.15);
+      note(chord.bass / 2, nextNoteTime, 3.0, 0.09);
+    }
+    note(chord.arp[pos], nextNoteTime, 1.7, 0.075);
+
+    if (pos === 2 && Math.random() < 0.55) {
+      note(chord.arp[3] * 1.5, nextNoteTime + 0.28, 1.2, 0.04);
+    }
+    if (pos === 3 && Math.random() < 0.3) {
+      note(chord.arp[2] * 2, nextNoteTime + 0.15, 0.9, 0.032);
+    }
+
+    nextNoteTime += STEP_TIME;
+    mStep++;
+  }
+}
+
+function updateMusicUI() {
+  musicIcon.textContent = musicOn ? '🔊' : '🔈';
+  musicBtn.classList.toggle('playing', musicOn);
+}
+
+function startMusic() {
+  if (!actx && !buildAudio()) return;
+  if (actx.state === 'suspended') actx.resume();
+  musicOn = true;
+  masterGain.gain.cancelScheduledValues(actx.currentTime);
+  masterGain.gain.setValueAtTime(masterGain.gain.value, actx.currentTime);
+  masterGain.gain.linearRampToValueAtTime(0.5, actx.currentTime + 1.8);
+  if (!musicTimer) {
+    nextNoteTime = actx.currentTime + 0.12;
+    musicTimer = setInterval(scheduler, 220);
+  }
+  updateMusicUI();
+}
+
+function stopMusic() {
+  musicOn = false;
+  updateMusicUI();
+  if (!actx) return;
+  masterGain.gain.cancelScheduledValues(actx.currentTime);
+  masterGain.gain.setValueAtTime(masterGain.gain.value, actx.currentTime);
+  masterGain.gain.linearRampToValueAtTime(0, actx.currentTime + 0.7);
+  const t = musicTimer;
+  musicTimer = null;
+  setTimeout(() => { if (t) clearInterval(t); }, 850);
+}
+
+musicBtn.addEventListener('click', (e) => {
+  e.stopPropagation();
+  if (musicOn) stopMusic(); else startMusic();
+});
+
+// 首次点击/触摸页面时自动开启音乐（符合浏览器自动播放策略）
+function autoStartMusic() {
+  if (autoMusicTried) return;
+  autoMusicTried = true;
+  if (!musicOn) startMusic();
+}
+window.addEventListener('mousedown', autoStartMusic);
+window.addEventListener('touchstart', autoStartMusic);
 
 /* ══════════════════════════════════════════════════════════════
    启动
