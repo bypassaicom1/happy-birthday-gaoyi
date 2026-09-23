@@ -59,6 +59,47 @@
   }
 
   /* 音乐控制按钮 */
+  /* ===== 开场引导层（不自动播放音乐，引导点击）===== */
+  .gate {
+    position:fixed; inset:0; z-index:50;
+    display:flex; flex-direction:column; align-items:center; justify-content:center;
+    background:rgba(6,3,14,.6);
+    backdrop-filter:blur(10px);
+    -webkit-backdrop-filter:blur(10px);
+    transition:opacity .85s ease, visibility .85s;
+  }
+  .gate.hide { opacity:0; visibility:hidden; pointer-events:none; }
+  .gate-icon {
+    font-size:62px; margin-bottom:20px;
+    animation:gateFloat 3.2s ease-in-out infinite;
+    filter:drop-shadow(0 0 22px rgba(255,160,200,.7));
+  }
+  @keyframes gateFloat {
+    0%,100% { transform:translateY(0) scale(1); }
+    50%     { transform:translateY(-11px) scale(1.07); }
+  }
+  .gate-title {
+    font-size:29px; font-weight:700; letter-spacing:5px; margin-bottom:12px;
+    background:linear-gradient(92deg,#ffd9e8,#ffb3d1 30%,#ffe6a7 62%,#d9b8ff);
+    -webkit-background-clip:text; background-clip:text; color:transparent;
+    filter:drop-shadow(0 0 18px rgba(255,140,190,.6));
+  }
+  .gate-sub { font-size:14px; letter-spacing:3px; color:rgba(255,225,240,.72); margin-bottom:34px; }
+  .gate-btn {
+    padding:15px 42px; border-radius:999px; cursor:pointer; font-family:inherit;
+    border:1px solid rgba(255,190,220,.5);
+    background:linear-gradient(135deg, rgba(255,140,190,.3), rgba(200,130,255,.26));
+    color:#fff; font-size:15px; letter-spacing:2px;
+    animation:gateGlow 2.6s ease-in-out infinite;
+    transition:transform .25s ease;
+  }
+  .gate-btn:hover { transform:translateY(-2px) scale(1.05); }
+  @keyframes gateGlow {
+    0%,100% { box-shadow:0 0 26px rgba(255,107,157,.35), inset 0 0 18px rgba(255,180,220,.12); }
+    50%     { box-shadow:0 0 44px rgba(255,107,157,.62), inset 0 0 26px rgba(255,180,220,.2); }
+  }
+  .gate-note { margin-top:18px; font-size:12px; letter-spacing:1.5px; color:rgba(255,255,255,.3); }
+
   .music-btn {
     position:fixed; right:22px; bottom:22px; z-index:20;
     width:52px; height:52px; border-radius:50%;
@@ -123,6 +164,15 @@
 </head>
 <body>
 <canvas id="stage"></canvas>
+
+<!-- 开场引导层：点击后才播放音乐 -->
+<div class="gate" id="gate">
+  <div class="gate-icon">🎂</div>
+  <div class="gate-title" id="gateTitle">高怡，生日快乐</div>
+  <div class="gate-sub" id="gateSub">有一份小心意，等你开启 ✨</div>
+  <button class="gate-btn" id="gateBtn">🎵 点击开启（含背景音乐）</button>
+  <div class="gate-note">进入后可随时用右下角按钮关闭音乐</div>
+</div>
 <div class="vignette"></div>
 
 <div class="overlay">
@@ -138,13 +188,15 @@
   <span id="musicIcon">🔈</span>
 </button>
 
-<div class="hint">点击任意处绽放烟花 · 移动鼠标拨动星尘 · 右下角开启音乐</div>
+<div class="hint">点击任意处绽放烟花 · 移动鼠标拨动星尘 · 右下角控制音乐</div>
 
 <script>
 /* ══════════════════════════════════════════════════════════════
    ⚙️  可自定义区域
    ══════════════════════════════════════════════════════════════ */
 const TITLE_TEXT = '🎂 高怡 · 生日快乐 🎂';        // 底部大标题
+const GATE_TITLE = '高怡，生日快乐';              // 引导层标题
+const GATE_SUB = '有一份小心意，等你开启 ✨';       // 引导层副标题
 const SUBTITLES = [                                // 轮播祝福语
   '高怡，愿你岁岁平安 · 事事顺遂',
   '高怡，愿你眼里有光 · 心中有暖',
@@ -769,16 +821,18 @@ window.addEventListener('mousemove', (e) => {
 });
 window.addEventListener('mouseleave', () => { mouse.x = -9999; mouse.y = -9999; });
 
+let entered = false;   // 是否已点击进入（引导层关闭）
+
 function fireAt(x, y) {
   burst(x, y, { scale: 0.95 + Math.random() * 0.45 });
   setTimeout(() => burst(x + (Math.random() - 0.5) * 90, y + (Math.random() - 0.5) * 90, { scale: 0.62 }), 130);
 }
-window.addEventListener('mousedown', (e) => fireAt(e.clientX, e.clientY));
+window.addEventListener('mousedown', (e) => { if (entered) fireAt(e.clientX, e.clientY); });
 window.addEventListener('touchstart', (e) => {
   const t0 = e.touches[0];
   mouse.x = t0.clientX;
   mouse.y = t0.clientY;
-  fireAt(t0.clientX, t0.clientY);
+  if (entered) fireAt(t0.clientX, t0.clientY);
 }, { passive: true });
 
 /* ══════════════════════════════════════════════════════════════
@@ -890,7 +944,6 @@ let musicTimer = null;
 let musicOn = false;
 let mStep = 0;
 let nextNoteTime = 0;
-let autoMusicTried = false;
 
 // 原创和弦进行（C - G - Am - F，经典温馨走向）
 const PROG = [
@@ -1009,14 +1062,24 @@ musicBtn.addEventListener('click', (e) => {
   if (musicOn) stopMusic(); else startMusic();
 });
 
-// 首次点击/触摸页面时自动开启音乐（符合浏览器自动播放策略）
-function autoStartMusic() {
-  if (autoMusicTried) return;
-  autoMusicTried = true;
-  if (!musicOn) startMusic();
+// ---- 开场引导层：必须由观看者主动点击，音乐才开始播放 ----
+const gateEl = document.getElementById('gate');
+const gateBtnEl = document.getElementById('gateBtn');
+document.getElementById('gateTitle').textContent = GATE_TITLE;
+document.getElementById('gateSub').textContent = GATE_SUB;
+
+function enterWithMusic() {
+  if (entered) return;
+  entered = true;
+  gateEl.classList.add('hide');
+  setTimeout(() => { gateEl.style.display = 'none'; }, 900);
+  startMusic();                    // 用户主动点击 → 浏览器允许播放
 }
-window.addEventListener('mousedown', autoStartMusic);
-window.addEventListener('touchstart', autoStartMusic);
+
+gateBtnEl.addEventListener('click', (e) => {
+  e.stopPropagation();
+  enterWithMusic();
+});
 
 /* ══════════════════════════════════════════════════════════════
    启动
