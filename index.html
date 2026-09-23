@@ -64,6 +64,52 @@
   }
 
   /* 音乐控制按钮 */
+  /* ===== 时间锁：9.25 之前保持神秘 ===== */
+  .lock {
+    position:fixed; inset:0; z-index:60;
+    display:none;                        /* 由 JS 控制 */
+    flex-direction:column; align-items:center; justify-content:center;
+    background:rgba(6,3,14,.72);
+    backdrop-filter:blur(15px);
+    -webkit-backdrop-filter:blur(15px);
+    text-align:center; padding:20px;
+    transition:opacity .9s ease;
+  }
+  .lock.hide { opacity:0; pointer-events:none; }
+  .lock-icon {
+    font-size:56px; margin-bottom:22px;
+    animation:lockFloat 3.4s ease-in-out infinite;
+    filter:drop-shadow(0 0 26px rgba(255,180,220,.8));
+  }
+  @keyframes lockFloat {
+    0%,100% { transform:translateY(0) rotate(-5deg) scale(1); }
+    50%     { transform:translateY(-12px) rotate(6deg) scale(1.07); }
+  }
+  .lock-title {
+    font-size:22px; font-weight:700; letter-spacing:4px; margin-bottom:12px;
+    background:linear-gradient(92deg,#ffd9e8,#ffb3d1 40%,#ffd9a8 76%,#d9b8ff);
+    -webkit-background-clip:text; background-clip:text; color:transparent;
+    filter:drop-shadow(0 0 18px rgba(255,140,190,.65));
+  }
+  .lock-sub { font-size:14px; letter-spacing:3px; color:rgba(255,225,240,.72); margin-bottom:32px; }
+  .lock-countdown { display:flex; gap:14px; margin-bottom:26px; }
+  .lock-countdown .cd-item {
+    min-width:62px; padding:12px 8px; border-radius:14px;
+    background:rgba(30,16,40,.55);
+    border:1px solid rgba(255,190,220,.24);
+    box-shadow:0 0 22px rgba(255,107,157,.18);
+  }
+  .lock-countdown .cd-item span {
+    display:block; font-size:25px; font-weight:700; color:#ffe3ef;
+    text-shadow:0 0 16px rgba(255,150,200,.85);
+    font-variant-numeric:tabular-nums;
+  }
+  .lock-countdown .cd-item label {
+    display:block; margin-top:6px; font-size:11px; letter-spacing:2px;
+    color:rgba(255,214,232,.6);
+  }
+  .lock-hint { font-size:12px; letter-spacing:2px; color:rgba(255,255,255,.32); }
+
   /* ===== 开场引导层（不自动播放音乐，引导点击）===== */
   .gate {
     position:fixed; inset:0; z-index:50;
@@ -320,6 +366,15 @@
 
   /* ===== 手机 / 竖屏适配 ===== */
   @media (max-width: 640px), (orientation: portrait) and (max-width: 900px) {
+    .lock-icon { font-size:44px; margin-bottom:16px; }
+    .lock-title { font-size:17px; letter-spacing:2.5px; }
+    .lock-sub { font-size:12px; letter-spacing:2px; margin-bottom:24px; }
+    .lock-countdown { gap:9px; margin-bottom:20px; }
+    .lock-countdown .cd-item { min-width:52px; padding:10px 6px; border-radius:11px; }
+    .lock-countdown .cd-item span { font-size:20px; }
+    .lock-countdown .cd-item label { font-size:10px; }
+    .lock-hint { font-size:10.5px; }
+
     .gate-icon { font-size:48px; margin-bottom:16px; }
     .gate-title { font-size:21px; letter-spacing:3px; margin-bottom:10px; }
     .gate-sub { font-size:12.5px; letter-spacing:2px; margin-bottom:26px; }
@@ -365,6 +420,20 @@
 
 <!-- 背景音乐（与 index.html 同目录的 333.mp3） -->
 <audio id="bgm" src="333.mp3" loop preload="auto" playsinline webkit-playsinline></audio>
+
+<!-- 时间锁：9.25 之前保持神秘（不泄露内容）-->
+<div class="lock" id="lock">
+  <div class="lock-icon">🎁</div>
+  <div class="lock-title">有份小惊喜，正在路上</div>
+  <div class="lock-sub">9 月 25 日 开启</div>
+  <div class="lock-countdown">
+    <div class="cd-item"><span id="cdD">--</span><label>天</label></div>
+    <div class="cd-item"><span id="cdH">--</span><label>时</label></div>
+    <div class="cd-item"><span id="cdM">--</span><label>分</label></div>
+    <div class="cd-item"><span id="cdS">--</span><label>秒</label></div>
+  </div>
+  <div class="lock-hint">提前打开会破坏惊喜哦 ✨</div>
+</div>
 
 <!-- 开场引导层：点击后才播放音乐 -->
 <div class="gate" id="gate">
@@ -1860,7 +1929,56 @@ function boot() {
   }
 }
 
-boot();
+/* ══════════════════════════════════════════════════════════════
+   🔒 时间锁：9 月 25 日之前只显示神秘倒计时
+   （自己预览时可在网址后加 ?preview=1 跳过锁）
+   ══════════════════════════════════════════════════════════════ */
+const UNLOCK_DATE = new Date('2026-09-25T00:00:00');   // 解锁时间
+const PREVIEW_MODE = new URLSearchParams(location.search).has('preview');
+const lockEl = document.getElementById('lock');
+const cdD = document.getElementById('cdD');
+const cdH = document.getElementById('cdH');
+const cdM = document.getElementById('cdM');
+const cdS = document.getElementById('cdS');
+let lockTimer = null;
+
+function unlockNow() {
+  clearInterval(lockTimer);
+  lockTimer = null;
+  lockEl.classList.add('hide');
+  setTimeout(() => { lockEl.style.display = 'none'; }, 950);
+  // 解锁后展示引导层，由她点击进入
+  gateEl.style.display = 'flex';
+  gateEl.classList.remove('hide');
+}
+
+function startLockCountdown() {
+  const tick = () => {
+    const left = UNLOCK_DATE.getTime() - Date.now();
+    if (left <= 0) { unlockNow(); return; }
+    const d = Math.floor(left / 86400000);
+    const h = Math.floor((left % 86400000) / 3600000);
+    const m = Math.floor((left % 3600000) / 60000);
+    const sec = Math.floor((left % 60000) / 1000);
+    cdD.textContent = String(d);
+    cdH.textContent = String(h).padStart(2, '0');
+    cdM.textContent = String(m).padStart(2, '0');
+    cdS.textContent = String(sec).padStart(2, '0');
+  };
+  tick();
+  lockTimer = setInterval(tick, 1000);
+}
+
+if (Date.now() < UNLOCK_DATE.getTime() && !PREVIEW_MODE) {
+  // 未到时间 → 上锁（背景粒子继续流动，透过毛玻璃隐约可见，保持神秘）
+  gateEl.style.display = 'none';
+  lockEl.style.display = 'flex';
+  boot();
+  startLockCountdown();
+} else {
+  lockEl.style.display = 'none';
+  boot();
+}
 
 let rt;
 function handleViewportChange() {
