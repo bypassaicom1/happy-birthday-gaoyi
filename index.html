@@ -195,6 +195,9 @@
 <body>
 <canvas id="stage"></canvas>
 
+<!-- 背景音乐（与 index.html 同目录的 222.mp3） -->
+<audio id="bgm" src="222.mp3" loop preload="auto"></audio>
+
 <!-- 开场引导层：点击后才播放音乐 -->
 <div class="gate" id="gate">
   <div class="gate-icon">🎂</div>
@@ -623,7 +626,7 @@ function updateFlames() {
 
 // ---- 炸开音效（Web Audio 合成的低频轰鸣） ----
 function playBlast() {
-  if (!actx) return;
+  if (!ensureAudioEngine()) return;
   try {
     const dur = 1.35;
     const buf = actx.createBuffer(1, Math.floor(actx.sampleRate * dur), actx.sampleRate);
@@ -916,7 +919,7 @@ function hideHint() {
 
 // 轻快的「叮」声（每次推进的反馈音）
 function playDing(pitch) {
-  if (!actx) return;
+  if (!ensureAudioEngine()) return;
   try {
     const t = actx.currentTime;
     const osc = actx.createOscillator();
@@ -1160,10 +1163,16 @@ function updateMusicUI() {
   musicBtn.classList.toggle('playing', musicOn);
 }
 
-function startMusic() {
-  if (!actx && !buildAudio()) return;
+// ---- 音频引擎（仅用于音效：叮声 / 炸开轰鸣）----
+function ensureAudioEngine() {
+  if (!actx && !buildAudio()) return false;
   if (actx.state === 'suspended') actx.resume();
-  musicOn = true;
+  return true;
+}
+
+// ---- 合成音乐（仅在 mp3 加载失败时回退使用）----
+function startSynthMusic() {
+  if (!actx) return;
   masterGain.gain.cancelScheduledValues(actx.currentTime);
   masterGain.gain.setValueAtTime(masterGain.gain.value, actx.currentTime);
   masterGain.gain.linearRampToValueAtTime(0.5, actx.currentTime + 1.8);
@@ -1171,12 +1180,9 @@ function startMusic() {
     nextNoteTime = actx.currentTime + 0.12;
     musicTimer = setInterval(scheduler, 220);
   }
-  updateMusicUI();
 }
 
-function stopMusic() {
-  musicOn = false;
-  updateMusicUI();
+function stopSynthMusic() {
   if (!actx) return;
   masterGain.gain.cancelScheduledValues(actx.currentTime);
   masterGain.gain.setValueAtTime(masterGain.gain.value, actx.currentTime);
@@ -1184,6 +1190,31 @@ function stopMusic() {
   const t = musicTimer;
   musicTimer = null;
   setTimeout(() => { if (t) clearInterval(t); }, 850);
+}
+
+// ---- 背景音乐：播放 222.mp3 ----
+const bgmEl = document.getElementById('bgm');
+const BGM_VOLUME = 0.55;      // 背景音乐音量（0~1），想更轻就调小
+let bgmReady = false;
+
+function startMusic() {
+  ensureAudioEngine();          // 音效引擎（叮声 / 轰鸣）
+  musicOn = true;
+  updateMusicUI();
+
+  bgmEl.volume = BGM_VOLUME;
+  const pr = bgmEl.play();
+  if (pr && pr.then) {
+    pr.then(() => { bgmReady = true; })
+      .catch(() => { startSynthMusic(); });   // mp3 不可用 → 回退合成音乐
+  }
+}
+
+function stopMusic() {
+  musicOn = false;
+  updateMusicUI();
+  try { bgmEl.pause(); } catch (e) { /* 忽略 */ }
+  stopSynthMusic();
 }
 
 musicBtn.addEventListener('click', (e) => {
