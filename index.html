@@ -231,8 +231,8 @@
 <body>
 <canvas id="stage"></canvas>
 
-<!-- 背景音乐（与 index.html 同目录的 222.mp3） -->
-<audio id="bgm" src="222.mp3" loop preload="auto" playsinline webkit-playsinline></audio>
+<!-- 背景音乐（与 index.html 同目录的 333.mp3） -->
+<audio id="bgm" src="333.mp3" loop preload="auto" playsinline webkit-playsinline></audio>
 
 <!-- 开场引导层：点击后才播放音乐 -->
 <div class="gate" id="gate">
@@ -1292,7 +1292,7 @@ function stopSynthMusic() {
   setTimeout(() => { if (t) clearInterval(t); }, 850);
 }
 
-// ---- 背景音乐：播放 222.mp3 ----
+// ---- 背景音乐：播放 333.mp3 ----
 const bgmEl = document.getElementById('bgm');
 const BGM_VOLUME = 0.55;      // 背景音乐音量（0~1），想更轻就调小
 let bgmReady = false;
