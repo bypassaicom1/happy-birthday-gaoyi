@@ -135,6 +135,58 @@
     50%     { transform:translateY(-4px) scale(1.12); }
   }
 
+  /* ===== 许愿时刻（点蛋糕后、爆炸前）===== */
+  .wish-moment {
+    position:fixed; inset:0; z-index:18;
+    display:flex; flex-direction:column; align-items:center; justify-content:center;
+    pointer-events:none; opacity:0;
+    transition:opacity .75s ease;
+  }
+  .wish-moment.show { opacity:1; }
+  .wish-moment .wish-icon {
+    font-size:54px; margin-bottom:20px;
+    animation:wishCandle 2.3s ease-in-out infinite;
+    filter:drop-shadow(0 0 28px rgba(255,200,120,.9));
+  }
+  @keyframes wishCandle {
+    0%,100% { transform:scale(1) translateY(0); opacity:.9; }
+    50%     { transform:scale(1.14) translateY(-7px); opacity:1; }
+  }
+  .wish-moment .wish-text {
+    font-size:23px; letter-spacing:6px; color:#ffe9c4;
+    text-shadow:0 0 22px rgba(255,190,120,.95), 0 0 48px rgba(255,150,80,.65);
+    animation:wishPulse 2.3s ease-in-out infinite;
+  }
+  @keyframes wishPulse {
+    0%,100% { opacity:.86; transform:scale(1); }
+    50%     { opacity:1;   transform:scale(1.03); }
+  }
+
+  /* ===== 爆炸后浮现的愿望卡片 ===== */
+  .wish-card {
+    position:fixed; left:50%; top:50%; z-index:19;
+    transform:translate(-50%, -50%) scale(.88);
+    opacity:0; pointer-events:none; text-align:center;
+    padding:26px 40px; border-radius:22px;
+    background:rgba(28,14,38,.64);
+    backdrop-filter:blur(13px);
+    -webkit-backdrop-filter:blur(13px);
+    border:1px solid rgba(255,200,160,.4);
+    box-shadow:0 0 48px rgba(255,150,90,.36), inset 0 0 32px rgba(255,180,120,.1);
+    transition:opacity .85s ease, transform .85s cubic-bezier(.2,.9,.3,1.25);
+  }
+  .wish-card.show { opacity:1; transform:translate(-50%, -50%) scale(1); }
+  .wish-card .card-icon { font-size:40px; margin-bottom:14px; }
+  .wish-card .card-title {
+    font-size:14.5px; letter-spacing:3px; color:rgba(255,228,205,.82); margin-bottom:12px;
+  }
+  .wish-card .card-text {
+    font-size:23px; font-weight:700; letter-spacing:3px; line-height:1.5;
+    background:linear-gradient(92deg,#ffd9a8,#ffe9c4 38%,#ffc4d6 74%,#ffd9a8);
+    -webkit-background-clip:text; background-clip:text; color:transparent;
+    filter:drop-shadow(0 0 16px rgba(255,180,120,.8));
+  }
+
   .music-btn {
     position:fixed; right:22px; bottom:22px; z-index:20;
     width:52px; height:52px; border-radius:50%;
@@ -215,6 +267,13 @@
     }
     .hint-next .finger { font-size:15px; }
 
+    .wish-moment .wish-icon { font-size:40px; margin-bottom:14px; }
+    .wish-moment .wish-text { font-size:17px; letter-spacing:4px; }
+    .wish-card { padding:20px 26px; border-radius:18px; width:auto; max-width:86vw; }
+    .wish-card .card-icon { font-size:32px; margin-bottom:10px; }
+    .wish-card .card-title { font-size:12.5px; letter-spacing:2px; margin-bottom:9px; }
+    .wish-card .card-text { font-size:18px; letter-spacing:2px; }
+
     .music-btn { width:44px; height:44px; font-size:18px; right:14px; bottom:14px; }
     .hint { font-size:9.5px; letter-spacing:1px; bottom:6px; }
   }
@@ -248,6 +307,19 @@
   <span class="finger" id="hintIcon">👆</span>
   <span id="hintText">点击继续</span>
 </div>
+
+<!-- 许愿时刻：点击蛋糕后、爆炸前 -->
+<div class="wish-moment" id="wishMoment">
+  <div class="wish-icon">🕯️</div>
+  <div class="wish-text" id="wishMomentText">闭上眼睛，许个愿吧</div>
+</div>
+
+<!-- 爆炸后浮现的愿望卡片 -->
+<div class="wish-card" id="wishCard">
+  <div class="card-icon">🎓</div>
+  <div class="card-title" id="wishCardTitle">我也为你许了一个愿望</div>
+  <div class="card-text" id="wishCardText">祝你考研一定上岸！</div>
+</div>
 <div class="vignette"></div>
 
 <div class="overlay">
@@ -272,6 +344,12 @@
 const TITLE_TEXT = '🎂 高怡 · 生日快乐 🎂';        // 底部大标题
 const GATE_TITLE = '高怡，生日快乐';              // 引导层标题
 const GATE_SUB = '有一份小心意，等你开启 ✨';       // 引导层副标题
+
+// —— 许愿环节文案（可自定义）——
+const WISH_HINT = '闭上眼睛，许个愿吧';           // 点蛋糕后浮现的许愿提示
+const WISH_CARD_TITLE = '我也为你许了一个愿望';    // 爆炸后卡片小标题
+const WISH_CARD_TEXT = '祝你考研一定上岸！';       // 爆炸后卡片正文
+const WISH_SECONDS = 2800;                       // 许愿停留时长（毫秒）
 const SUBTITLES = [                                // 轮播祝福语
   '高怡，愿你岁岁平安 · 事事顺遂',
   '高怡，愿你眼里有光 · 心中有暖',
@@ -288,7 +366,7 @@ const SHAPES = [
   { kind: 'text',  lines: ['生日快乐'],             hint: '点击继续',              icon: '👆' },
   { kind: 'heart',                                 hint: '点击继续',              icon: '👆' },
   { kind: 'text',  lines: ['高怡', '生日快乐'],      hint: '点击继续',              icon: '👆' },
-  { kind: 'cake',                                  hint: '点击吹蜡烛，许个愿吧',    icon: '🎂', action: 'blast' },
+  { kind: 'cake',                                  hint: '点击蛋糕，闭上眼睛许个愿吧', icon: '🎂', action: 'blast' },
   { kind: 'text',  lines: ['HAPPY', 'BIRTHDAY'],   hint: '点击继续',              icon: '👆' },
   { kind: 'star',                                  hint: '点击继续',              icon: '👆' },
   { kind: 'text',  lines: ['永远开心'],             hint: '点击继续',              icon: '👆' },
@@ -987,9 +1065,19 @@ function handleTap(x, y) {
     hintShown = false;
     hideHint();
     if (sc.action === 'blast') {
-      cakeBlast();                                  // 吹蜡烛 → 炸开
-      playDing(1);
-      setTimeout(() => goNextScene(), 2000);
+      // ① 先引导许愿（烛火变旺，安静几秒）
+      showWishMoment();
+      playDing(1.15);
+      setTimeout(() => {
+        // ② 许愿结束 → 爆炸
+        hideWishMoment();
+        cakeBlast();
+        // ③ 爆炸后浮现「我也许了一个愿望」
+        setTimeout(() => showWishCard(), 950);
+        setTimeout(() => hideWishCard(), 4400);
+        // ④ 进入下一幕
+        setTimeout(() => goNextScene(), 5400);
+      }, WISH_SECONDS);
     } else {
       goNextScene();
     }
@@ -1047,6 +1135,26 @@ function playDing(pitch) {
     osc.start(t);
     osc.stop(t + 0.65);
   } catch (e) { /* 忽略 */ }
+}
+
+// —— 许愿时刻 / 愿望卡片 ——
+let wishingMode = false;
+const wishMomentEl = document.getElementById('wishMoment');
+const wishCardEl = document.getElementById('wishCard');
+
+function showWishMoment() {
+  wishingMode = true;
+  wishMomentEl.classList.add('show');
+}
+function hideWishMoment() {
+  wishingMode = false;
+  wishMomentEl.classList.remove('show');
+}
+function showWishCard() {
+  wishCardEl.classList.add('show');
+}
+function hideWishCard() {
+  wishCardEl.classList.remove('show');
 }
 
 // 推进到下一幕
@@ -1125,7 +1233,8 @@ function frame(t) {
   /* ---- 🎂 蛋糕：烛火摇曳（等观看者点击吹蜡烛才炸开）---- */
   if (SHAPES[shapeIndex].kind === 'cake') {
     const cg = cakeGeom();
-    for (let i = 0; i < 3; i++) spawnFlame(cg);
+    const flameCount = wishingMode ? 9 : 3;   // 许愿时烛火更旺
+    for (let i = 0; i < flameCount; i++) spawnFlame(cg);
   }
   updateFlames();
 
@@ -1360,6 +1469,10 @@ const gateEl = document.getElementById('gate');
 const gateBtnEl = document.getElementById('gateBtn');
 document.getElementById('gateTitle').textContent = GATE_TITLE;
 document.getElementById('gateSub').textContent = GATE_SUB;
+// 许愿环节文案（改文件顶部的常量即可）
+document.getElementById('wishMomentText').textContent = WISH_HINT;
+document.getElementById('wishCardTitle').textContent = WISH_CARD_TITLE;
+document.getElementById('wishCardText').textContent = WISH_CARD_TEXT;
 
 function enterWithMusic() {
   if (entered) return;
