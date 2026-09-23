@@ -426,9 +426,9 @@ const SUBTITLES = [                                // 轮播祝福语
 const SHAPES = [
   { kind: 'text',  lines: ['高怡'],                hint: '点击继续',              icon: '👆' },
   { kind: 'text',  lines: ['生日快乐'],             hint: '点击继续',              icon: '👆' },
-  { kind: 'heart',                                 hint: '点击继续',              icon: '👆' },
+  { kind: 'heart', lines: ['生日快乐'],             hint: '点击继续',              icon: '👆' },
   { kind: 'text',  lines: ['高怡', '生日快乐'],      hint: '点击继续',              icon: '👆' },
-  { kind: 'cake',                                  hint: '点击蛋糕，闭上眼睛许个愿吧', icon: '🎂', action: 'blast' },
+  { kind: 'cake', lines: ['生日快乐'],              hint: '点击蛋糕，闭上眼睛许个愿吧', icon: '🎂', action: 'blast' },
   { kind: 'text',  lines: ['HAPPY', 'BIRTHDAY'],   hint: '点击继续',              icon: '👆' },
   { kind: 'star',                                  hint: '点击继续',              icon: '👆' },
   { kind: 'text',  lines: ['永远开心'],             hint: '点击继续',              icon: '👆' },
@@ -602,7 +602,7 @@ function fontStr(fs) {
   return `700 ${fs}px "Microsoft YaHei","PingFang SC","Segoe UI",sans-serif`;
 }
 
-function drawHeart(g, cx, cy, size) {
+function drawHeart(g, cx, cy, size, lineWidth) {
   const s = size / 17;
   g.beginPath();
   for (let t = 0; t <= Math.PI * 2 + 0.05; t += 0.04) {
@@ -613,7 +613,15 @@ function drawHeart(g, cx, cy, size) {
     if (t === 0) g.moveTo(px, py); else g.lineTo(px, py);
   }
   g.closePath();
-  g.fill();
+  if (lineWidth) {
+    // 描边模式：粒子勾勒爱心轮廓，中间留白写文字
+    g.lineWidth = lineWidth;
+    g.lineCap = 'round';
+    g.lineJoin = 'round';
+    g.stroke();
+  } else {
+    g.fill();
+  }
 }
 
 function drawStar(g, cx, cy, r) {
@@ -674,17 +682,37 @@ function sampleShape(shape) {
     lines.forEach((ln, i) => octx.fillText(ln, W / 2, startY + i * lh));
     gap = Math.max(3, Math.round((fs / 36) * QUALITY.grainGap));
   } else if (shape.kind === 'heart') {
-    const size = Math.min(W * 0.52, H * 0.52);
-    drawHeart(octx, W / 2, shapeCenterY(), size);
-    gap = Math.max(3, Math.round((size / 145) * QUALITY.grainGap));
+    const size = Math.min(W * 0.62, H * 0.62);
+    const cy = shapeCenterY();
+    octx.strokeStyle = '#fff';
+    // 爱心轮廓
+    drawHeart(octx, W / 2, cy, size, Math.max(7, size * 0.048));
+    // 爱心内部文字
+    if (shape.lines && shape.lines.length) {
+      const fs = Math.min(size * 0.165, W * 0.17);
+      octx.font = fontStr(fs);
+      octx.fillText(shape.lines[0], W / 2, cy + size * 0.015);
+    }
+    gap = Math.max(3, Math.round((size / 150) * QUALITY.grainGap));
   } else if (shape.kind === 'star') {
     const r = Math.min(W * 0.34, H * 0.34);
     drawStar(octx, W / 2, shapeCenterY(), r);
     gap = Math.max(3, Math.round((r / 78) * QUALITY.grainGap));
   } else if (shape.kind === 'cake') {
-    const size = Math.min(W * 0.56, H * 0.54);
-    drawCake(octx, W / 2, shapeCenterY() * 1.02, size);
-    gap = Math.max(3, Math.round((size / 140) * QUALITY.grainGap));
+    const size = Math.min(W * 0.58, H * 0.56);
+    const ccy = shapeCenterY() * 1.02;
+    drawCake(octx, W / 2, ccy, size);
+    // 在蛋糕体上"刻"出文字（挖空 → 负空间呈现文字）
+    if (shape.lines && shape.lines.length) {
+      const fs = Math.min(size * 0.125, W * 0.12);
+      octx.save();
+      octx.globalCompositeOperation = 'destination-out';
+      octx.font = fontStr(fs);
+      octx.fillText(shape.lines[0], W / 2, ccy + size * 0.05);
+      octx.restore();
+      octx.globalCompositeOperation = 'source-over';
+    }
+    gap = Math.max(3, Math.round((size / 145) * QUALITY.grainGap));
   }
 
   const img = octx.getImageData(0, 0, W, H).data;
