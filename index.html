@@ -138,9 +138,10 @@
   /* ===== 许愿时刻（点蛋糕后、爆炸前）===== */
   .wish-moment {
     position:fixed; inset:0; z-index:18;
-    display:flex; flex-direction:column; align-items:center; justify-content:center;
+    display:none;                    /* 由 JS 控制显示，隐藏时彻底不渲染 */
+    flex-direction:column; align-items:center; justify-content:center;
     pointer-events:none; opacity:0;
-    transition:opacity .75s ease;
+    transition:opacity .7s ease;
   }
   .wish-moment.show { opacity:1; }
   .wish-moment .wish-icon {
@@ -165,6 +166,7 @@
   /* ===== 爆炸后浮现的愿望卡片 ===== */
   .wish-card {
     position:fixed; left:50%; top:50%; z-index:19;
+    display:none;                    /* 由 JS 控制显示 */
     transform:translate(-50%, -50%) scale(.88);
     opacity:0; pointer-events:none; text-align:center;
     padding:26px 40px; border-radius:22px;
@@ -190,10 +192,11 @@
   /* ===== 愿望卡片之后的「好奇追问」打字机动画 ===== */
   .wonder-text {
     position:fixed; left:50%; top:50%; z-index:19;
+    display:none;                    /* 由 JS 控制显示 */
     transform:translate(-50%, -50%);
     opacity:0; pointer-events:none; text-align:center;
     max-width:88vw;
-    transition:opacity .85s ease;
+    transition:opacity .8s ease;
   }
   .wonder-text.show { opacity:1; }
   .wonder-text .wonder-icon {
@@ -1147,7 +1150,14 @@ function fireAt(x, y) {
   burst(x, y, { scale: 0.95 + Math.random() * 0.45 });
   setTimeout(() => burst(x + (Math.random() - 0.5) * 90, y + (Math.random() - 0.5) * 90, { scale: 0.62 }), 130);
 }
+let lastTapAt = 0;
+
 function handleTap(x, y) {
+  // 手机上一次触摸会同时触发 touchstart 与 mousedown，去重避免重复推进
+  const now = performance.now();
+  if (now - lastTapAt < 320) return;
+  lastTapAt = now;
+
   if (!entered) return;
   // 剧情推进阶段：点击 = 继续（未稳定时点击无效，避免误触）
   if (!finished) {
@@ -1168,9 +1178,9 @@ function handleTap(x, y) {
         setTimeout(() => hideWishCard(), 4400);
         // ④ 卡片淡出后，追问「不知道你偷偷许了什么愿望呢？」
         setTimeout(() => playWonderText(), 5300);
-        setTimeout(() => hideWonderText(), 12200);
+        setTimeout(() => hideWonderText(), 10800);
         // ⑤ 再进入下一幕
-        setTimeout(() => goNextScene(), 13100);
+        setTimeout(() => goNextScene(), 11700);
       }, WISH_SECONDS);
     } else {
       goNextScene();
@@ -1236,29 +1246,51 @@ let wishingMode = false;
 const wishMomentEl = document.getElementById('wishMoment');
 const wishCardEl = document.getElementById('wishCard');
 
+let wishMomentHideTimer = null;
+let wishCardHideTimer = null;
+
 function showWishMoment() {
   wishingMode = true;
+  clearTimeout(wishMomentHideTimer);
+  wishMomentEl.style.display = 'flex';
+  void wishMomentEl.offsetWidth;              // 强制重排，保证淡入过渡生效
   wishMomentEl.classList.add('show');
 }
 function hideWishMoment() {
   wishingMode = false;
   wishMomentEl.classList.remove('show');
+  clearTimeout(wishMomentHideTimer);
+  wishMomentHideTimer = setTimeout(() => {
+    // 淡出结束后彻底移出渲染（防止手机上残留）
+    if (!wishingMode) wishMomentEl.style.display = 'none';
+  }, 760);
 }
 function showWishCard() {
+  clearTimeout(wishCardHideTimer);
+  wishCardEl.style.display = 'block';
+  void wishCardEl.offsetWidth;
   wishCardEl.classList.add('show');
 }
 function hideWishCard() {
   wishCardEl.classList.remove('show');
+  clearTimeout(wishCardHideTimer);
+  wishCardHideTimer = setTimeout(() => {
+    wishCardEl.style.display = 'none';
+  }, 900);
 }
 
 // —— 好奇追问（打字机逐字浮现）——
 let wonderInterval = null;
+let wonderHideTimer = null;
 const wonderEl = document.getElementById('wonderText');
 const wonderLineEl = document.getElementById('wonderLine');
 const wonderCursorEl = document.getElementById('wonderCursor');
 
 function playWonderText() {
+  clearTimeout(wonderHideTimer);
+  wonderEl.style.display = 'block';
   wonderEl.classList.remove('done');
+  void wonderEl.offsetWidth;
   wonderEl.classList.add('show');
   wonderLineEl.textContent = '';
   wonderCursorEl.style.display = 'inline-block';
@@ -1282,15 +1314,27 @@ function hideWonderText() {
   clearInterval(wonderInterval);
   wonderInterval = null;
   wonderEl.classList.remove('show', 'done');
+  clearTimeout(wonderHideTimer);
+  wonderHideTimer = setTimeout(() => {
+    wonderEl.style.display = 'none';
+  }, 900);
 }
 
 // 推进到下一幕
+// 一次性清掉所有浮层（防止任何残留）
+function hideAllOverlays() {
+  hideWishMoment();
+  hideWishCard();
+  hideWonderText();
+  hideHint();
+}
+
 function goNextScene() {
   const next = shapeIndex + 1;
   lastShapeAt = nowEt;
   hintShown = false;
   blasted = false;
-  hideHint();
+  hideAllOverlays();
 
   if (next >= SHAPES.length) {
     // 全部演完 → 自由观赏模式
@@ -1378,6 +1422,17 @@ function frame(t) {
     lastShapeAt = et;
     shapeIndex = (shapeIndex + 1) % SHAPES.length;
     morphTo(shapeIndex, true);
+  }
+
+  /* ---- 浮层看门狗：任何情况下卡住的浮层都会被强制隐藏 ---- */
+  if (!wishingMode && !wishMomentEl.classList.contains('show') && wishMomentEl.style.display !== 'none') {
+    wishMomentEl.style.display = 'none';
+  }
+  if (!wishCardEl.classList.contains('show') && wishCardEl.style.display !== 'none') {
+    wishCardEl.style.display = 'none';
+  }
+  if (!wonderEl.classList.contains('show') && wonderEl.style.display !== 'none') {
+    wonderEl.style.display = 'none';
   }
 
   /* ---- 帧率监测：持续掉帧则自动降级 ---- */
@@ -1635,7 +1690,7 @@ function boot() {
     hintShown = false;
     finished = false;
     blasted = false;
-    hideHint();
+    hideAllOverlays();
   }
   // 重建时保持当前这一幕，不让剧情重来
   morphTo(shapeIndex, false);
