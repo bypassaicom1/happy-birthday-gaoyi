@@ -195,6 +195,35 @@
     filter:drop-shadow(0 0 16px rgba(255,180,120,.8));
   }
 
+  /* ===== 最后的心里话（逐字浮现）===== */
+  .final-words {
+    position:fixed; left:50%; top:50%; z-index:19;
+    display:none;
+    transform:translate(-50%, -50%);
+    opacity:0; pointer-events:none; text-align:center;
+    max-width:86vw;
+    transition:opacity .95s ease;
+  }
+  .final-words.show { opacity:1; }
+  .final-words .fw-line {
+    font-size:19px; letter-spacing:2px; line-height:2.05;
+    color:#ffeaf2; font-weight:500;
+    white-space:pre-line;
+    text-shadow:0 0 18px rgba(255,160,200,.8), 0 0 44px rgba(200,140,255,.55);
+  }
+  .final-words .fw-cursor {
+    display:inline-block; width:2px; height:1em; vertical-align:-0.12em;
+    background:#ffd6e8; margin-left:3px;
+    box-shadow:0 0 10px rgba(255,180,220,.9);
+    animation:cursorBlink .85s step-end infinite;
+  }
+  .final-words .fw-sign {
+    margin-top:22px; font-size:14px; letter-spacing:4px;
+    color:rgba(255,214,232,.7);
+    opacity:0; transition:opacity 1.1s ease .2s;
+  }
+  .final-words.done .fw-sign { opacity:1; }
+
   /* ===== 愿望卡片之后的「好奇追问」打字机动画 ===== */
   .wonder-text {
     position:fixed; left:50%; top:50%; z-index:19;
@@ -315,6 +344,8 @@
     .wish-card .card-text { font-size:18px; letter-spacing:2px; }
     .wonder-text .wonder-icon { font-size:26px; margin-bottom:12px; }
     .wonder-text .wonder-line { font-size:15.5px; letter-spacing:1.5px; line-height:1.8; }
+    .final-words .fw-line { font-size:14.5px; letter-spacing:1.2px; line-height:1.95; }
+    .final-words .fw-sign { font-size:12px; letter-spacing:3px; margin-top:16px; }
 
     .music-btn { width:44px; height:44px; font-size:18px; right:14px; bottom:14px; }
     .hint { font-size:9.5px; letter-spacing:1px; bottom:6px; }
@@ -362,6 +393,12 @@
   <div class="card-text" id="wishCardText">祝你考研一定上岸！</div>
 </div>
 
+<!-- 最后的心里话（自动循环一轮后浮现）-->
+<div class="final-words" id="finalWords">
+  <div class="fw-line"><span id="fwLine"></span><span class="fw-cursor" id="fwCursor"></span></div>
+  <div class="fw-sign" id="fwSign"></div>
+</div>
+
 <!-- 愿望卡片之后：好奇追问（打字机动画）-->
 <div class="wonder-text" id="wonderText">
   <div class="wonder-icon">💭</div>
@@ -397,6 +434,16 @@ const WISH_HINT = '闭上眼睛，许个愿吧';           // 点蛋糕后浮现
 const WISH_CARD_TITLE = '我也为你许了一个愿望';    // 爆炸后卡片小标题
 const WISH_CARD_TEXT = '祝你考研一定上岸！';       // 爆炸后卡片正文
 const CHEER_TEXT = '恭喜你的愿望一定会成功实现';    // 爆炸后的第一句话
+
+// —— 最后想对她说的话（自动循环一轮后逐字浮现）——
+const FINAL_WORDS =
+  '你是一个细心努力的人，\n' +
+  '可能别人不理解你，\n' +
+  '但你要相信自己，肯定能行。\n\n' +
+  '我也相信你！';
+const FINAL_SIGN = '—— 小李';
+const FINAL_SPEED = 95;      // 打字速度（毫秒/字）
+const FINAL_HOLD = 5200;     // 打完后停留时长（毫秒）
 const WISH_SECONDS = 2800;                       // 许愿停留时长（毫秒）
 const WONDER_TEXT =
   '不知道你偷偷许了什么愿望呢？\n\n' +
@@ -1342,6 +1389,67 @@ function playWonderText() {
   }, WONDER_SPEED);
 }
 
+// —— 最后的心里话 ——
+let finalWordsActive = false;
+let finalInterval = null;
+let finalHideTimer = null;
+let finalCleanupTimer = null;
+const finalEl = document.getElementById('finalWords');
+const fwLineEl = document.getElementById('fwLine');
+const fwCursorEl = document.getElementById('fwCursor');
+const fwSignEl = document.getElementById('fwSign');
+
+function playFinalWords() {
+  if (finalWordsActive) return;
+  finalWordsActive = true;
+
+  // 粒子散开成背景星尘，避免与文字重叠
+  for (const pt of particles) {
+    const a = Math.random() * Math.PI * 2;
+    const d = Math.min(W, H) * (0.34 + Math.random() * 0.36);
+    pt.retarget(W / 2 + Math.cos(a) * d, shapeCenterY() + Math.sin(a) * d, true);
+  }
+
+  clearTimeout(finalHideTimer);
+  clearTimeout(finalCleanupTimer);
+  finalEl.style.display = 'block';
+  finalEl.classList.remove('done');
+  void finalEl.offsetWidth;
+  finalEl.classList.add('show');
+  fwLineEl.textContent = '';
+  fwSignEl.textContent = FINAL_SIGN;
+  fwCursorEl.style.display = 'inline-block';
+
+  let i = 0;
+  clearInterval(finalInterval);
+  finalInterval = setInterval(() => {
+    i++;
+    fwLineEl.textContent = FINAL_WORDS.slice(0, i);
+    if (i % 3 === 0) playDing(1.7, 0.028);
+    if (i >= FINAL_WORDS.length) {
+      clearInterval(finalInterval);
+      finalInterval = null;
+      fwCursorEl.style.display = 'none';
+      finalEl.classList.add('done');         // 显示署名
+      playDing(1.35, 0.06);
+      finalHideTimer = setTimeout(hideFinalWords, FINAL_HOLD);
+    }
+  }, FINAL_SPEED);
+}
+
+function hideFinalWords() {
+  clearInterval(finalInterval);
+  finalInterval = null;
+  clearTimeout(finalHideTimer);
+  finalEl.classList.remove('show', 'done');
+  clearTimeout(finalCleanupTimer);
+  finalCleanupTimer = setTimeout(() => {
+    finalEl.style.display = 'none';
+  }, 1000);
+  finalWordsActive = false;
+  lastShapeAt = nowEt;                       // 恢复形态循环计时
+}
+
 function hideWonderText() {
   clearInterval(wonderInterval);
   wonderInterval = null;
@@ -1358,6 +1466,7 @@ function hideAllOverlays() {
   hideWishMoment();
   hideWishCard();
   hideWonderText();
+  hideFinalWords();
   hideHint();
 }
 
@@ -1448,15 +1557,19 @@ function frame(t) {
   }
 
   /* ---- 全部演完后：形态自动循环播放 ---- */
-  if (finished && et - lastShapeAt > SHAPE_DURATION) {
+  if (finished && !finalWordsActive && et - lastShapeAt > SHAPE_DURATION) {
     lastShapeAt = et;
     shapeIndex = (shapeIndex + 1) % SHAPES.length;
     blasted = false;                                  // 重置，让蛋糕每轮都能再炸
     morphTo(shapeIndex, true);
+    // 每轮走完回到第一幕时，说出最后的心里话
+    if (shapeIndex === 0) {
+      setTimeout(() => playFinalWords(), 900);
+    }
   }
 
   /* ---- 循环模式下，蛋糕到点自动炸开 ---- */
-  if (finished && SHAPES[shapeIndex].kind === 'cake' && !blasted && since > SHAPE_DURATION * 0.55) {
+  if (finished && !finalWordsActive && SHAPES[shapeIndex].kind === 'cake' && !blasted && since > SHAPE_DURATION * 0.55) {
     blasted = true;
     cakeBlast();
   }
@@ -1470,6 +1583,9 @@ function frame(t) {
   }
   if (!wonderEl.classList.contains('show') && wonderEl.style.display !== 'none') {
     wonderEl.style.display = 'none';
+  }
+  if (!finalEl.classList.contains('show') && finalEl.style.display !== 'none') {
+    finalEl.style.display = 'none';
   }
 
   /* ---- 帧率监测：持续掉帧则自动降级 ---- */
