@@ -100,6 +100,36 @@
   }
   .gate-note { margin-top:18px; font-size:12px; letter-spacing:1.5px; color:rgba(255,255,255,.3); }
 
+  /* ===== 每一步的「点击继续」提示 ===== */
+  .hint-next {
+    position:fixed; left:50%; bottom:26%; z-index:15;
+    transform:translateX(-50%) translateY(12px);
+    opacity:0; pointer-events:none;
+    display:flex; align-items:center; gap:9px;
+    padding:12px 26px; border-radius:999px;
+    background:rgba(30,16,40,.52);
+    backdrop-filter:blur(9px);
+    -webkit-backdrop-filter:blur(9px);
+    border:1px solid rgba(255,190,220,.3);
+    color:#ffd6e8; font-size:14.5px; letter-spacing:2px;
+    box-shadow:0 0 24px rgba(255,107,157,.22);
+    transition:opacity .5s ease, transform .5s ease;
+  }
+  .hint-next.show {
+    opacity:1;
+    transform:translateX(-50%) translateY(0);
+    animation:hintBob 1.9s ease-in-out infinite;
+  }
+  @keyframes hintBob {
+    0%,100% { transform:translateX(-50%) translateY(0); }
+    50%     { transform:translateX(-50%) translateY(-8px); }
+  }
+  .hint-next .finger { font-size:17px; display:inline-block; animation:fingerTap 1.3s ease-in-out infinite; }
+  @keyframes fingerTap {
+    0%,100% { transform:translateY(0) scale(1); }
+    50%     { transform:translateY(-4px) scale(1.12); }
+  }
+
   .music-btn {
     position:fixed; right:22px; bottom:22px; z-index:20;
     width:52px; height:52px; border-radius:50%;
@@ -173,6 +203,12 @@
   <button class="gate-btn" id="gateBtn">🎵 点击开启（含背景音乐）</button>
   <div class="gate-note">进入后可随时用右下角按钮关闭音乐</div>
 </div>
+
+<!-- 每一步的点击引导提示 -->
+<div class="hint-next" id="hintNext">
+  <span class="finger" id="hintIcon">👆</span>
+  <span id="hintText">点击继续</span>
+</div>
 <div class="vignette"></div>
 
 <div class="overlay">
@@ -209,13 +245,14 @@ const SUBTITLES = [                                // 轮播祝福语
 
 // 粒子形态循环（text 可多行；heart / cake / star 为图形）
 const SHAPES = [
-  { kind: 'text',  lines: ['高怡'] },              // 开场：她的名字
-  { kind: 'text',  lines: ['生日快乐'] },
-  { kind: 'heart' },                               // 爱心
-  { kind: 'text',  lines: ['高怡', '生日快乐'] },
-  { kind: 'cake' },                                // 蛋糕
-  { kind: 'text',  lines: ['HAPPY', 'BIRTHDAY'] },
-  { kind: 'star' },                                // 星星
+  { kind: 'text',  lines: ['高怡'],                hint: '点击继续',              icon: '👆' },
+  { kind: 'text',  lines: ['生日快乐'],             hint: '点击继续',              icon: '👆' },
+  { kind: 'heart',                                 hint: '点击继续',              icon: '👆' },
+  { kind: 'text',  lines: ['高怡', '生日快乐'],      hint: '点击继续',              icon: '👆' },
+  { kind: 'cake',                                  hint: '点击吹蜡烛，许个愿吧',    icon: '🎂', action: 'blast' },
+  { kind: 'text',  lines: ['HAPPY', 'BIRTHDAY'],   hint: '点击继续',              icon: '👆' },
+  { kind: 'star',                                  hint: '点击继续',              icon: '👆' },
+  { kind: 'text',  lines: ['永远开心'],             hint: '点击继续',              icon: '👆' },
 ];
 const SHAPE_DURATION = 4800;   // 每个形态停留时长（毫秒）
 
@@ -827,13 +864,102 @@ function fireAt(x, y) {
   burst(x, y, { scale: 0.95 + Math.random() * 0.45 });
   setTimeout(() => burst(x + (Math.random() - 0.5) * 90, y + (Math.random() - 0.5) * 90, { scale: 0.62 }), 130);
 }
-window.addEventListener('mousedown', (e) => { if (entered) fireAt(e.clientX, e.clientY); });
+function handleTap(x, y) {
+  if (!entered) return;
+  // 剧情推进阶段：点击 = 继续（未稳定时点击无效，避免误触）
+  if (!finished) {
+    if (!hintShown) return;
+    const sc = SHAPES[shapeIndex];
+    hintShown = false;
+    hideHint();
+    if (sc.action === 'blast') {
+      cakeBlast();                                  // 吹蜡烛 → 炸开
+      playDing(1);
+      setTimeout(() => goNextScene(), 2000);
+    } else {
+      goNextScene();
+    }
+    return;
+  }
+  // 自由阶段：点击 = 放烟花
+  fireAt(x, y);
+}
+
+window.addEventListener('mousedown', (e) => handleTap(e.clientX, e.clientY));
 window.addEventListener('touchstart', (e) => {
   const t0 = e.touches[0];
   mouse.x = t0.clientX;
   mouse.y = t0.clientY;
-  if (entered) fireAt(t0.clientX, t0.clientY);
+  handleTap(t0.clientX, t0.clientY);
 }, { passive: true });
+
+/* ══════════════════════════════════════════════════════════════
+   🎬 分幕推进（每一步都由观看者点击驱动）
+   ══════════════════════════════════════════════════════════════ */
+let hintShown = false;
+let finished = false;
+let nowEt = 0;
+
+const hintEl = document.getElementById('hintNext');
+const hintTextEl = document.getElementById('hintText');
+const hintIconEl = document.getElementById('hintIcon');
+
+function showHint(text, icon) {
+  hintTextEl.textContent = text;
+  hintIconEl.textContent = icon || '👆';
+  hintEl.classList.add('show');
+}
+
+function hideHint() {
+  hintEl.classList.remove('show');
+}
+
+// 轻快的「叮」声（每次推进的反馈音）
+function playDing(pitch) {
+  if (!actx) return;
+  try {
+    const t = actx.currentTime;
+    const osc = actx.createOscillator();
+    const g = actx.createGain();
+    osc.type = 'sine';
+    const base = 740 * (pitch || 1);
+    osc.frequency.setValueAtTime(base, t);
+    osc.frequency.exponentialRampToValueAtTime(base * 1.5, t + 0.1);
+    g.gain.setValueAtTime(0, t);
+    g.gain.linearRampToValueAtTime(0.11, t + 0.012);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + 0.6);
+    osc.connect(g);
+    g.connect(actx.destination);
+    osc.start(t);
+    osc.stop(t + 0.65);
+  } catch (e) { /* 忽略 */ }
+}
+
+// 推进到下一幕
+function goNextScene() {
+  const next = shapeIndex + 1;
+  lastShapeAt = nowEt;
+  hintShown = false;
+  blasted = false;
+  hideHint();
+
+  if (next >= SHAPES.length) {
+    // 全部演完 → 自由观赏模式
+    finished = true;
+    shapeIndex = 0;
+    morphTo(0, true);
+    volley();
+    setTimeout(() => {
+      showHint('已看完整个祝福 · 点击任意处放烟花', '🎆');
+      hintShown = true;
+    }, 2200);
+    return;
+  }
+
+  shapeIndex = next;
+  morphTo(shapeIndex, true);
+  playDing(1);
+}
 
 /* ══════════════════════════════════════════════════════════════
    主循环
@@ -881,22 +1007,25 @@ function frame(t) {
     volley();
   }
 
-  /* ---- 🎂 蛋糕：烛火摇曳 + 到点炸开 ---- */
+  /* ---- 🎂 蛋糕：烛火摇曳（等观看者点击吹蜡烛才炸开）---- */
   if (SHAPES[shapeIndex].kind === 'cake') {
     const cg = cakeGeom();
     for (let i = 0; i < 3; i++) spawnFlame(cg);
-    if (!blasted && since > SHAPE_DURATION * 0.55) {
-      blasted = true;
-      cakeBlast();
-    }
   }
   updateFlames();
 
-  /* ---- 形态轮换 ---- */
-  if (et - lastShapeAt > SHAPE_DURATION) {
+  /* ---- 分幕交互：粒子稳定后提示「点击继续」---- */
+  nowEt = et;
+  if (entered && !finished && !hintShown && since > 1700) {
+    hintShown = true;
+    const sc = SHAPES[shapeIndex];
+    showHint(sc.hint || '点击继续', sc.icon || '👆');
+  }
+
+  /* ---- 全部演完后进入自由观赏：形态自动循环 ---- */
+  if (finished && et - lastShapeAt > SHAPE_DURATION) {
     lastShapeAt = et;
     shapeIndex = (shapeIndex + 1) % SHAPES.length;
-    blasted = false;
     morphTo(shapeIndex, true);
   }
 
@@ -1096,6 +1225,10 @@ function boot() {
   morphTo(0, false);
   lastShapeAt = 0;
   startTime = 0;
+  hintShown = false;
+  finished = false;
+  blasted = false;
+  hideHint();
   running = true;
   requestAnimationFrame(frame);
 
