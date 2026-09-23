@@ -5,11 +5,16 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>生日快乐 🎂</title>
 <style>
-  * { margin:0; padding:0; box-sizing:border-box; }
+  * { margin:0; padding:0; box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
   html, body {
-    width:100%; height:100%; overflow:hidden; background:#04020a;
+    width:100%; height:100%;
+    height:100dvh;                 /* 移动端动态视口，避开地址栏遮挡 */
+    overflow:hidden; background:#04020a;
+    touch-action:manipulation;     /* 防止双击缩放 */
+    -webkit-user-select:none; user-select:none;
     font-family:"Microsoft YaHei","PingFang SC","Segoe UI",sans-serif;
   }
+  #stage { touch-action:none; }
   #stage { display:block; width:100%; height:100%; }
 
   .overlay {
@@ -190,13 +195,44 @@
     position:fixed; inset:0; pointer-events:none;
     background:radial-gradient(ellipse at 50% 46%, rgba(0,0,0,0) 34%, rgba(0,0,0,.75) 100%);
   }
+
+  /* ===== 手机 / 竖屏适配 ===== */
+  @media (max-width: 640px), (orientation: portrait) and (max-width: 900px) {
+    .gate-icon { font-size:48px; margin-bottom:16px; }
+    .gate-title { font-size:21px; letter-spacing:3px; margin-bottom:10px; }
+    .gate-sub { font-size:12.5px; letter-spacing:2px; margin-bottom:26px; }
+    .gate-btn { padding:13px 28px; font-size:14px; letter-spacing:1.5px; }
+    .gate-note { font-size:11px; margin-top:14px; }
+
+    .overlay { padding-bottom:24px; }
+    .title { font-size:16px; letter-spacing:3px; margin-bottom:10px; }
+    .subtitle { font-size:11.5px; letter-spacing:1.5px; height:18px; }
+    .song-link { font-size:11.5px; padding:8px 15px; margin-top:12px; gap:6px; }
+
+    .hint-next {
+      bottom:28%; font-size:13px; letter-spacing:1.5px;
+      padding:10px 20px; gap:7px;
+    }
+    .hint-next .finger { font-size:15px; }
+
+    .music-btn { width:44px; height:44px; font-size:18px; right:14px; bottom:14px; }
+    .hint { font-size:9.5px; letter-spacing:1px; bottom:6px; }
+  }
+
+  /* 超小屏（窄手机） */
+  @media (max-width: 380px) {
+    .gate-title { font-size:18px; letter-spacing:2px; }
+    .title { font-size:14px; letter-spacing:2px; }
+    .subtitle { font-size:10.5px; }
+    .hint-next { font-size:12px; padding:9px 16px; }
+  }
 </style>
 </head>
 <body>
 <canvas id="stage"></canvas>
 
 <!-- 背景音乐（与 index.html 同目录的 222.mp3） -->
-<audio id="bgm" src="222.mp3" loop preload="auto"></audio>
+<audio id="bgm" src="222.mp3" loop preload="auto" playsinline webkit-playsinline></audio>
 
 <!-- 开场引导层：点击后才播放音乐 -->
 <div class="gate" id="gate">
@@ -278,6 +314,34 @@ SUB_EL.querySelectorAll('span').forEach((el) => {
   el.style.animationDuration = (SUBTITLES.length * 3) + 's';
 });
 
+/* ── 设备与画质分级（手机/平板自动降级，保证流畅）── */
+const IS_MOBILE =
+  /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini|Mobile|HarmonyOS/i.test(navigator.userAgent) ||
+  (window.matchMedia && window.matchMedia('(pointer: coarse)').matches) ||
+  Math.min(window.innerWidth, window.innerHeight) < 600;
+
+const QUALITY = IS_MOBILE
+  ? {
+      maxParticles: 3000,   // 手机粒子数（桌面 6200）
+      dprCap: 1.3,          // 限制渲染分辨率，省 GPU
+      bloom: false,         // 手机不做泛光后处理（最耗性能的一步）
+      starsDivisor: 15000,  // 星星更稀疏
+      grainGap: 1.35,       // 采样间隔放大 → 粒子更少
+      fxScale: 0.55,        // 烟花粒子数减半
+      fireworkEvery: 4200,  // 自动烟花间隔更长
+      nebulaHalf: true,     // 星云半分辨率
+    }
+  : {
+      maxParticles: 6200,
+      dprCap: 2,
+      bloom: true,
+      starsDivisor: 7000,
+      grainGap: 1,
+      fxScale: 1,
+      fireworkEvery: 2300,
+      nebulaHalf: true,
+    };
+
 const stage = document.getElementById('stage');
 const ctx = stage.getContext('2d', { alpha: false });
 
@@ -296,7 +360,7 @@ const octx = off.getContext('2d', { willReadFrequently: true });
 let W = 0, H = 0, dpr = 1, BW = 0, BH = 0;
 
 function resize() {
-  dpr = Math.min(window.devicePixelRatio || 1, 2);
+  dpr = Math.min(window.devicePixelRatio || 1, QUALITY.dprCap);
   W = window.innerWidth;
   H = window.innerHeight;
   stage.width = Math.floor(W * dpr);
@@ -434,22 +498,22 @@ function sampleShape(shape) {
     }
     if (lines.length > 1) fs = Math.min(fs, (H * 0.5) / lines.length / 1.2);
     const lh = fs * 1.18;
-    const startY = H * 0.44 - ((lines.length - 1) * lh) / 2;
+    const startY = shapeCenterY() - ((lines.length - 1) * lh) / 2;
     octx.font = fontStr(fs);
     lines.forEach((ln, i) => octx.fillText(ln, W / 2, startY + i * lh));
-    gap = Math.max(3, Math.round(fs / 36));
+    gap = Math.max(3, Math.round((fs / 36) * QUALITY.grainGap));
   } else if (shape.kind === 'heart') {
     const size = Math.min(W * 0.52, H * 0.52);
-    drawHeart(octx, W / 2, H * 0.44, size);
-    gap = Math.max(3, Math.round(size / 145));
+    drawHeart(octx, W / 2, shapeCenterY(), size);
+    gap = Math.max(3, Math.round((size / 145) * QUALITY.grainGap));
   } else if (shape.kind === 'star') {
     const r = Math.min(W * 0.34, H * 0.34);
-    drawStar(octx, W / 2, H * 0.44, r);
-    gap = Math.max(3, Math.round(r / 78));
+    drawStar(octx, W / 2, shapeCenterY(), r);
+    gap = Math.max(3, Math.round((r / 78) * QUALITY.grainGap));
   } else if (shape.kind === 'cake') {
     const size = Math.min(W * 0.56, H * 0.54);
-    drawCake(octx, W / 2, H * 0.46, size);
-    gap = Math.max(3, Math.round(size / 140));
+    drawCake(octx, W / 2, shapeCenterY() * 1.02, size);
+    gap = Math.max(3, Math.round((size / 140) * QUALITY.grainGap));
   }
 
   const img = octx.getImageData(0, 0, W, H).data;
@@ -466,7 +530,14 @@ function sampleShape(shape) {
 /* ══════════════════════════════════════════════════════════════
    粒子
    ══════════════════════════════════════════════════════════════ */
-const MAX_PARTICLES = 6200;
+const MAX_PARTICLES = QUALITY.maxParticles;
+
+// 动态降级：帧率过低时自动减粒子、关泛光
+let bloomEnabled = QUALITY.bloom;
+let degraded = false;
+let lastFrameT = 0;
+let fpsAcc = 0;
+let fpsCount = 0;
 
 class Particle {
   constructor() {
@@ -588,9 +659,14 @@ let blasted = false;   // 本次蛋糕形态是否已炸开
 let flash = 0;         // 全屏闪光强度
 
 // 蛋糕几何（与 drawCake 保持一致）
+function shapeCenterY() {
+  // 竖屏时文字上移一点，给底部标题/按钮留空间
+  return W > H ? H * 0.45 : H * 0.38;
+}
+
 function cakeGeom() {
   const size = Math.min(W * 0.56, H * 0.54);
-  const cy = H * 0.46;
+  const cy = shapeCenterY() * 1.02;
   const h = size * 0.8;
   const y0 = cy - h / 2 + h * 0.1;
   return { cx: W / 2, cy, size, h, y0, flameX: W / 2, flameY: y0 - h * 0.21 };
@@ -705,23 +781,24 @@ function burst(x, y, options = {}) {
   const c1 = pickColorIdx();
   let c2 = pickColorIdx();
   if (c2 === c1) c2 = PURE_WHITE;
+  const FS = QUALITY.fxScale;   // 粒子数缩放（手机减半）
 
   if (type === 'peony') {
-    const n = 130;
+    const n = Math.round(130 * FS);
     for (let i = 0; i < n; i++) {
       const a = Math.random() * Math.PI * 2;
       const sp = (1.1 + Math.random() * 4.6) * scale;
       push(mk(Math.cos(a) * sp, Math.sin(a) * sp, Math.random() < 0.3 ? PURE_WHITE : c1, 0.008 + Math.random() * 0.012, 0.5 + Math.random() * 0.5));
     }
   } else if (type === 'ring') {
-    const n = 110;
+    const n = Math.round(110 * FS);
     const r = (2.9 + Math.random() * 0.7) * scale;
     for (let i = 0; i < n; i++) {
       const a = (i / n) * Math.PI * 2;
       push(mk(Math.cos(a) * r, Math.sin(a) * r, c1, 0.0072, 0.62, 0.02));
     }
   } else if (type === 'heart') {
-    const n = 120;
+    const n = Math.round(120 * FS);
     for (let i = 0; i < n; i++) {
       const t = (i / n) * Math.PI * 2;
       const hx = 16 * Math.pow(Math.sin(t), 3);
@@ -730,14 +807,14 @@ function burst(x, y, options = {}) {
       push(mk(hx * k, -hy * k, Math.random() < 0.35 ? c2 : c1, 0.0068, 0.68, 0.018));
     }
   } else if (type === 'willow') {
-    const n = 95;
+    const n = Math.round(95 * FS);
     for (let i = 0; i < n; i++) {
       const a = Math.random() * Math.PI * 2;
       const sp = (0.6 + Math.random() * 2.1) * scale;
       push(mk(Math.cos(a) * sp, Math.sin(a) * sp - 0.6, c1, 0.0035, 0.72, 0.085));
     }
   } else if (type === 'chrys') {
-    const n = 150;
+    const n = Math.round(150 * FS);
     for (let i = 0; i < n; i++) {
       const a = Math.random() * Math.PI * 2;
       const sp = (2.2 + Math.random() * 3.4) * scale;
@@ -751,7 +828,7 @@ function burst(x, y, options = {}) {
       ));
     }
   } else { // double：双色同心环
-    const n = 72;
+    const n = Math.round(72 * FS);
     for (let i = 0; i < n; i++) {
       const a = (i / n) * Math.PI * 2;
       push(mk(Math.cos(a) * 1.7 * scale, Math.sin(a) * 1.7 * scale, c1, 0.0066, 0.66, 0.015));
@@ -760,7 +837,7 @@ function burst(x, y, options = {}) {
   }
 
   // 中心闪光
-  for (let i = 0; i < 14; i++) {
+  for (let i = 0; i < Math.round(14 * FS); i++) {
     const a = Math.random() * Math.PI * 2;
     const sp = Math.random() * 1.1;
     push(mk(Math.cos(a) * sp, Math.sin(a) * sp, PURE_WHITE, 0.05, 1.5, 0.02));
@@ -822,7 +899,7 @@ function buildNebula() {
 let stars = [];
 function buildStars() {
   stars = [];
-  const n = Math.round((W * H) / 7000);
+  const n = Math.round((W * H) / QUALITY.starsDivisor);
   for (let i = 0; i < n; i++) {
     stars.push({
       x: Math.random() * W,
@@ -1005,7 +1082,7 @@ function frame(t) {
   updateFireworks();
 
   /* ---- 自动烟花 ---- */
-  if (et - lastAutoFw > 2300) {
+  if (et - lastAutoFw > QUALITY.fireworkEvery) {
     lastAutoFw = et;
     volley();
   }
@@ -1032,13 +1109,32 @@ function frame(t) {
     morphTo(shapeIndex, true);
   }
 
-  /* ---- Bloom 泛光后处理 ---- */
-  bctx.setTransform(1, 0, 0, 1, 0, 0);
-  bctx.clearRect(0, 0, BW, BH);
-  bctx.globalCompositeOperation = 'source-over';
-  if ('filter' in bctx) bctx.filter = 'blur(2px)';
-  bctx.drawImage(scene, 0, 0, BW, BH);
-  if ('filter' in bctx) bctx.filter = 'none';
+  /* ---- 帧率监测：持续掉帧则自动降级 ---- */
+  if (lastFrameT) {
+    fpsAcc += t - lastFrameT;
+    fpsCount++;
+    if (fpsCount >= 50) {
+      const avg = fpsAcc / fpsCount;
+      if (!degraded && avg > 40 && particles.length > 1300) {
+        degraded = true;
+        bloomEnabled = false;
+        if (particles.length > 2000) particles.length = Math.floor(particles.length * 0.7);
+      }
+      fpsAcc = 0;
+      fpsCount = 0;
+    }
+  }
+  lastFrameT = t;
+
+  /* ---- Bloom 泛光后处理（手机默认关闭）---- */
+  if (bloomEnabled) {
+    bctx.setTransform(1, 0, 0, 1, 0, 0);
+    bctx.clearRect(0, 0, BW, BH);
+    bctx.globalCompositeOperation = 'source-over';
+    if ('filter' in bctx) bctx.filter = 'blur(2px)';
+    bctx.drawImage(scene, 0, 0, BW, BH);
+    if ('filter' in bctx) bctx.filter = 'none';
+  }
 
   /* ---- 合成到屏幕 ---- */
   ctx.setTransform(1, 0, 0, 1, 0, 0);
@@ -1046,10 +1142,12 @@ function frame(t) {
   ctx.globalAlpha = 1;
   ctx.drawImage(scene, 0, 0, stage.width, stage.height);
 
-  ctx.globalCompositeOperation = 'lighter';
-  ctx.globalAlpha = 0.34;
-  ctx.drawImage(bloomC, 0, 0, stage.width, stage.height);
-  ctx.globalAlpha = 1;
+  if (bloomEnabled) {
+    ctx.globalCompositeOperation = 'lighter';
+    ctx.globalAlpha = 0.34;
+    ctx.drawImage(bloomC, 0, 0, stage.width, stage.height);
+    ctx.globalAlpha = 1;
+  }
 
   // 蛋糕炸开瞬间的全屏闪光
   if (flash > 0.012) {
@@ -1272,13 +1370,22 @@ function boot() {
 boot();
 
 let rt;
-window.addEventListener('resize', () => {
+function handleViewportChange() {
   clearTimeout(rt);
   rt = setTimeout(() => {
     running = false;
     boot();
-  }, 220);
+  }, 260);
+}
+window.addEventListener('resize', handleViewportChange);
+window.addEventListener('orientationchange', () => {
+  // 旋转后尺寸变化有延迟，多等一会
+  clearTimeout(rt);
+  rt = setTimeout(() => { running = false; boot(); }, 480);
 });
+if (window.visualViewport) {
+  window.visualViewport.addEventListener('resize', handleViewportChange);
+}
 </script>
 </body>
 </html>
