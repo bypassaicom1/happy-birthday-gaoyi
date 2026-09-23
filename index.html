@@ -178,6 +178,12 @@
     transition:opacity .85s ease, transform .85s cubic-bezier(.2,.9,.3,1.25);
   }
   .wish-card.show { opacity:1; transform:translate(-50%, -50%) scale(1); }
+  .wish-card.swap { animation:cardSwap .62s ease; }
+  @keyframes cardSwap {
+    0%   { transform:translate(-50%, -50%) scale(1); }
+    42%  { transform:translate(-50%, -50%) scale(.93); opacity:.72; }
+    100% { transform:translate(-50%, -50%) scale(1); opacity:1; }
+  }
   .wish-card .card-icon { font-size:40px; margin-bottom:14px; }
   .wish-card .card-title {
     font-size:14.5px; letter-spacing:3px; color:rgba(255,228,205,.82); margin-bottom:12px;
@@ -370,7 +376,7 @@
 
 <!-- 爆炸后浮现的愿望卡片 -->
 <div class="wish-card" id="wishCard">
-  <div class="card-icon">🎓</div>
+  <div class="card-icon" id="wishCardIcon">🎓</div>
   <div class="card-title" id="wishCardTitle">我也为你许了一个愿望</div>
   <div class="card-text" id="wishCardText">祝你考研一定上岸！</div>
 </div>
@@ -412,6 +418,7 @@ const GATE_SUB = '有几句话，想说给你听';           // 引导层副标�
 const WISH_HINT = '闭上眼睛，许个愿吧';           // 点蛋糕后浮现的许愿提示
 const WISH_CARD_TITLE = '我也为你许了一个愿望';    // 爆炸后卡片小标题
 const WISH_CARD_TEXT = '祝你考研一定上岸！';       // 爆炸后卡片正文
+const CHEER_TEXT = '恭喜你的愿望一定会成功实现';    // 爆炸后的第一句话
 const WISH_SECONDS = 2800;                       // 许愿停留时长（毫秒）
 const WONDER_TEXT =
   '不知道你偷偷许了什么愿望呢？\n\n' +
@@ -1176,14 +1183,21 @@ function handleTap(x, y) {
         // ② 许愿结束 → 爆炸
         hideWishMoment();
         cakeBlast();
-        // ③ 爆炸后浮现「我也为你许了一个愿望 · 祝你考研一定上岸！」
-        setTimeout(() => showWishCard(), 950);
-        setTimeout(() => hideWishCard(), 4400);
-        // ④ 卡片淡出后，追问「不知道你偷偷许了什么愿望呢？」
-        setTimeout(() => playWonderText(), 5300);
-        setTimeout(() => hideWonderText(), 10800);
-        // ⑤ 再进入下一幕
-        setTimeout(() => goNextScene(), 11700);
+        // ③ 爆炸后先说：恭喜你的愿望一定会成功实现
+        setTimeout(() => {
+          setWishCard('🎉', '', CHEER_TEXT);
+          showWishCard();
+        }, 950);
+        // ④ 再换成「我也为你许了一个愿望 · 祝你考研一定上岸！」
+        setTimeout(() => {
+          setWishCard('🎓', WISH_CARD_TITLE, WISH_CARD_TEXT);
+        }, 3500);
+        setTimeout(() => hideWishCard(), 6300);
+        // ⑤ 卡片淡出后，打字机真心话
+        setTimeout(() => playWonderText(), 7200);
+        setTimeout(() => hideWonderText(), 12700);
+        // ⑥ 再进入下一幕
+        setTimeout(() => goNextScene(), 13600);
       }, WISH_SECONDS);
     } else {
       goNextScene();
@@ -1278,6 +1292,21 @@ function hideWishMoment() {
     wishMomentEl.style.transition = '';
   });
 }
+const wishCardIconEl = document.getElementById('wishCardIcon');
+const wishCardTitleEl = document.getElementById('wishCardTitle');
+const wishCardTextEl = document.getElementById('wishCardText');
+
+// 动态替换卡片内容（标题为空则隐藏标题行）
+function setWishCard(icon, title, text) {
+  wishCardIconEl.textContent = icon;
+  wishCardTitleEl.textContent = title || '';
+  wishCardTitleEl.style.display = title ? '' : 'none';
+  wishCardTextEl.textContent = text;
+  wishCardEl.classList.remove('swap');
+  void wishCardEl.offsetWidth;
+  wishCardEl.classList.add('swap');
+}
+
 function showWishCard() {
   clearTimeout(wishCardHideTimer);
   wishCardEl.style.display = 'block';
