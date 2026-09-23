@@ -187,6 +187,55 @@
     filter:drop-shadow(0 0 16px rgba(255,180,120,.8));
   }
 
+  /* ===== 愿望卡片之后的「好奇追问」打字机动画 ===== */
+  .wonder-text {
+    position:fixed; left:50%; top:50%; z-index:19;
+    transform:translate(-50%, -50%);
+    opacity:0; pointer-events:none; text-align:center;
+    max-width:88vw;
+    transition:opacity .85s ease;
+  }
+  .wonder-text.show { opacity:1; }
+  .wonder-text .wonder-icon {
+    font-size:34px; margin-bottom:16px; display:inline-block;
+    animation:wonderFloat 2.7s ease-in-out infinite;
+    filter:drop-shadow(0 0 20px rgba(200,160,255,.8));
+  }
+  @keyframes wonderFloat {
+    0%,100% { transform:translateY(0) rotate(-7deg) scale(1); opacity:.85; }
+    50%     { transform:translateY(-10px) rotate(9deg) scale(1.1); opacity:1; }
+  }
+  .wonder-text .wonder-line {
+    font-size:22px; letter-spacing:3px; line-height:1.5;
+    color:#eadcff; font-weight:600;
+    text-shadow:0 0 20px rgba(200,160,255,.9), 0 0 46px rgba(160,120,255,.6);
+  }
+  .wonder-text .cursor {
+    display:inline-block; width:2px; height:1em; vertical-align:-0.13em;
+    background:#d9b8ff; margin-left:4px;
+    box-shadow:0 0 10px rgba(200,160,255,.9);
+    animation:cursorBlink .85s step-end infinite;
+  }
+  @keyframes cursorBlink { 50% { opacity:0; } }
+  .wonder-text.done .wonder-line { animation:wonderBreath 3s ease-in-out infinite; }
+  @keyframes wonderBreath {
+    0%,100% { opacity:.9; transform:scale(1); }
+    50%     { opacity:1;  transform:scale(1.02); }
+  }
+  /* 追问文字周围飘散的星光 */
+  .wonder-text .spark {
+    position:absolute; font-size:14px; opacity:0;
+    animation:sparkFly 2.6s ease-out infinite;
+  }
+  .wonder-text .spark.s1 { left:-8%;  top:10%; animation-delay:0s; }
+  .wonder-text .spark.s2 { right:-6%; top:30%; animation-delay:.9s; }
+  .wonder-text .spark.s3 { left:12%;  bottom:-4%; animation-delay:1.7s; }
+  @keyframes sparkFly {
+    0%   { opacity:0; transform:translateY(6px) scale(.6); }
+    30%  { opacity:1; transform:translateY(-4px) scale(1.1); }
+    100% { opacity:0; transform:translateY(-22px) scale(.7); }
+  }
+
   .music-btn {
     position:fixed; right:22px; bottom:22px; z-index:20;
     width:52px; height:52px; border-radius:50%;
@@ -273,6 +322,8 @@
     .wish-card .card-icon { font-size:32px; margin-bottom:10px; }
     .wish-card .card-title { font-size:12.5px; letter-spacing:2px; margin-bottom:9px; }
     .wish-card .card-text { font-size:18px; letter-spacing:2px; }
+    .wonder-text .wonder-icon { font-size:26px; margin-bottom:12px; }
+    .wonder-text .wonder-line { font-size:16.5px; letter-spacing:2px; }
 
     .music-btn { width:44px; height:44px; font-size:18px; right:14px; bottom:14px; }
     .hint { font-size:9.5px; letter-spacing:1px; bottom:6px; }
@@ -320,6 +371,15 @@
   <div class="card-title" id="wishCardTitle">我也为你许了一个愿望</div>
   <div class="card-text" id="wishCardText">祝你考研一定上岸！</div>
 </div>
+
+<!-- 愿望卡片之后：好奇追问（打字机动画）-->
+<div class="wonder-text" id="wonderText">
+  <div class="wonder-icon">💭</div>
+  <div class="wonder-line"><span id="wonderLine"></span><span class="cursor" id="wonderCursor"></span></div>
+  <span class="spark s1">✨</span>
+  <span class="spark s2">✨</span>
+  <span class="spark s3">✨</span>
+</div>
 <div class="vignette"></div>
 
 <div class="overlay">
@@ -350,6 +410,8 @@ const WISH_HINT = '闭上眼睛，许个愿吧';           // 点蛋糕后浮现
 const WISH_CARD_TITLE = '我也为你许了一个愿望';    // 爆炸后卡片小标题
 const WISH_CARD_TEXT = '祝你考研一定上岸！';       // 爆炸后卡片正文
 const WISH_SECONDS = 2800;                       // 许愿停留时长（毫秒）
+const WONDER_TEXT = '不知道你偷偷许了什么愿望呢？';   // 愿望卡片之后的好奇追问（逐字打出）
+const WONDER_SPEED = 115;                        // 打字速度（毫秒/字）
 const SUBTITLES = [                                // 轮播祝福语
   '高怡，愿你岁岁平安 · 事事顺遂',
   '高怡，愿你眼里有光 · 心中有暖',
@@ -1072,11 +1134,14 @@ function handleTap(x, y) {
         // ② 许愿结束 → 爆炸
         hideWishMoment();
         cakeBlast();
-        // ③ 爆炸后浮现「我也许了一个愿望」
+        // ③ 爆炸后浮现「我也为你许了一个愿望 · 祝你考研一定上岸！」
         setTimeout(() => showWishCard(), 950);
         setTimeout(() => hideWishCard(), 4400);
-        // ④ 进入下一幕
-        setTimeout(() => goNextScene(), 5400);
+        // ④ 卡片淡出后，追问「不知道你偷偷许了什么愿望呢？」
+        setTimeout(() => playWonderText(), 5300);
+        setTimeout(() => hideWonderText(), 9200);
+        // ⑤ 再进入下一幕
+        setTimeout(() => goNextScene(), 10100);
       }, WISH_SECONDS);
     } else {
       goNextScene();
@@ -1117,7 +1182,7 @@ function hideHint() {
 }
 
 // 轻快的「叮」声（每次推进的反馈音）
-function playDing(pitch) {
+function playDing(pitch, vol) {
   if (!ensureAudioEngine()) return;
   try {
     const t = actx.currentTime;
@@ -1128,7 +1193,7 @@ function playDing(pitch) {
     osc.frequency.setValueAtTime(base, t);
     osc.frequency.exponentialRampToValueAtTime(base * 1.5, t + 0.1);
     g.gain.setValueAtTime(0, t);
-    g.gain.linearRampToValueAtTime(0.11, t + 0.012);
+    g.gain.linearRampToValueAtTime(vol || 0.11, t + 0.012);
     g.gain.exponentialRampToValueAtTime(0.0001, t + 0.6);
     osc.connect(g);
     g.connect(actx.destination);
@@ -1155,6 +1220,39 @@ function showWishCard() {
 }
 function hideWishCard() {
   wishCardEl.classList.remove('show');
+}
+
+// —— 好奇追问（打字机逐字浮现）——
+let wonderInterval = null;
+const wonderEl = document.getElementById('wonderText');
+const wonderLineEl = document.getElementById('wonderLine');
+const wonderCursorEl = document.getElementById('wonderCursor');
+
+function playWonderText() {
+  wonderEl.classList.remove('done');
+  wonderEl.classList.add('show');
+  wonderLineEl.textContent = '';
+  wonderCursorEl.style.display = 'inline-block';
+  let i = 0;
+  clearInterval(wonderInterval);
+  wonderInterval = setInterval(() => {
+    i++;
+    wonderLineEl.textContent = WONDER_TEXT.slice(0, i);
+    if (i % 2 === 0) playDing(1.95, 0.035);     // 极轻的落字声
+    if (i >= WONDER_TEXT.length) {
+      clearInterval(wonderInterval);
+      wonderInterval = null;
+      wonderCursorEl.style.display = 'none';    // 打完隐藏光标
+      wonderEl.classList.add('done');           // 整行开始轻轻呼吸
+      playDing(1.45, 0.07);
+    }
+  }, WONDER_SPEED);
+}
+
+function hideWonderText() {
+  clearInterval(wonderInterval);
+  wonderInterval = null;
+  wonderEl.classList.remove('show', 'done');
 }
 
 // 推进到下一幕
