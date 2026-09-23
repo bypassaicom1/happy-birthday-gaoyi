@@ -1166,6 +1166,9 @@ function handleTap(x, y) {
     hintShown = false;
     hideHint();
     if (sc.action === 'blast') {
+      // 标记为流程进行中，并重置计时，防止提示被重新显示
+      scenePending = true;
+      lastShapeAt = nowEt;
       // ① 先引导许愿（烛火变旺，安静几秒）
       showWishMoment();
       playDing(1.15);
@@ -1205,6 +1208,7 @@ window.addEventListener('touchstart', (e) => {
 let hintShown = false;
 let finished = false;
 let nowEt = 0;
+let scenePending = false;   // 正在执行「点蛋糕 → 许愿 → 爆炸」流程，期间不再显示提示
 
 const hintEl = document.getElementById('hintNext');
 const hintTextEl = document.getElementById('hintText');
@@ -1213,11 +1217,15 @@ const hintIconEl = document.getElementById('hintIcon');
 function showHint(text, icon) {
   hintTextEl.textContent = text;
   hintIconEl.textContent = icon || '👆';
+  hintEl.style.display = 'flex';
+  void hintEl.offsetWidth;
   hintEl.classList.add('show');
 }
 
 function hideHint() {
+  // 立即消失（不走淡出），避免任何残留
   hintEl.classList.remove('show');
+  hintEl.style.display = 'none';
 }
 
 // 轻快的「叮」声（每次推进的反馈音）
@@ -1339,6 +1347,7 @@ function goNextScene() {
   lastShapeAt = nowEt;
   hintShown = false;
   blasted = false;
+  scenePending = false;
   hideAllOverlays();
 
   if (next >= SHAPES.length) {
@@ -1413,7 +1422,7 @@ function frame(t) {
 
   /* ---- 分幕交互：粒子稳定后提示「点击继续」---- */
   nowEt = et;
-  if (entered && !finished && !hintShown && since > 1700) {
+  if (entered && !finished && !scenePending && !hintShown && since > 1700) {
     hintShown = true;
     const sc = SHAPES[shapeIndex];
     showHint(sc.hint || '点击继续', sc.icon || '👆');
@@ -1699,6 +1708,7 @@ function boot() {
     hintShown = false;
     finished = false;
     blasted = false;
+    scenePending = false;
     hideAllOverlays();
   }
   // 重建时保持当前这一幕，不让剧情重来
