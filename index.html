@@ -206,8 +206,9 @@
     50%     { transform:translateY(-10px) rotate(9deg) scale(1.1); opacity:1; }
   }
   .wonder-text .wonder-line {
-    font-size:22px; letter-spacing:3px; line-height:1.5;
+    font-size:20px; letter-spacing:2.5px; line-height:1.85;
     color:#eadcff; font-weight:600;
+    white-space:pre-line;              /* 保留文案里的换行 */
     text-shadow:0 0 20px rgba(200,160,255,.9), 0 0 46px rgba(160,120,255,.6);
   }
   .wonder-text .cursor {
@@ -323,7 +324,7 @@
     .wish-card .card-title { font-size:12.5px; letter-spacing:2px; margin-bottom:9px; }
     .wish-card .card-text { font-size:18px; letter-spacing:2px; }
     .wonder-text .wonder-icon { font-size:26px; margin-bottom:12px; }
-    .wonder-text .wonder-line { font-size:16.5px; letter-spacing:2px; }
+    .wonder-text .wonder-line { font-size:15.5px; letter-spacing:1.5px; line-height:1.8; }
 
     .music-btn { width:44px; height:44px; font-size:18px; right:14px; bottom:14px; }
     .hint { font-size:9.5px; letter-spacing:1px; bottom:6px; }
@@ -350,7 +351,6 @@
   <div class="gate-title" id="gateTitle">高怡，生日快乐</div>
   <div class="gate-sub" id="gateSub">有一份小心意，等你开启 ✨</div>
   <button class="gate-btn" id="gateBtn">🎵 点击开启（含背景音乐）</button>
-  <div class="gate-note">进入后可随时用右下角按钮关闭音乐</div>
 </div>
 
 <!-- 每一步的点击引导提示 -->
@@ -395,7 +395,7 @@
   <span id="musicIcon">🔈</span>
 </button>
 
-<div class="hint">点击任意处绽放烟花 · 移动鼠标拨动星尘 · 右下角控制音乐</div>
+<div class="hint">点击继续 · 右下角可开关音乐</div>
 
 <script>
 /* ══════════════════════════════════════════════════════════════
@@ -403,23 +403,24 @@
    ══════════════════════════════════════════════════════════════ */
 const TITLE_TEXT = '🎂 高怡 · 生日快乐 🎂';        // 底部大标题
 const GATE_TITLE = '高怡，生日快乐';              // 引导层标题
-const GATE_SUB = '有一份小心意，等你开启 ✨';       // 引导层副标题
+const GATE_SUB = '有几句话，想说给你听';           // 引导层副标题
 
 // —— 许愿环节文案（可自定义）——
 const WISH_HINT = '闭上眼睛，许个愿吧';           // 点蛋糕后浮现的许愿提示
 const WISH_CARD_TITLE = '我也为你许了一个愿望';    // 爆炸后卡片小标题
 const WISH_CARD_TEXT = '祝你考研一定上岸！';       // 爆炸后卡片正文
 const WISH_SECONDS = 2800;                       // 许愿停留时长（毫秒）
-const WONDER_TEXT = '不知道你偷偷许了什么愿望呢？';   // 愿望卡片之后的好奇追问（逐字打出）
+const WONDER_TEXT =
+  '不知道你偷偷许了什么愿望呢？\n\n' +
+  '很高兴认识你。\n' +
+  '认识你之后，我也开心了很多。';                 // 逐字打出
 const WONDER_SPEED = 115;                        // 打字速度（毫秒/字）
-const SUBTITLES = [                                // 轮播祝福语
-  '高怡，愿你岁岁平安 · 事事顺遂',
-  '高怡，愿你眼里有光 · 心中有暖',
-  '高怡，所念皆如愿 · 所行化坦途',
-  '高怡，新的一岁 · 万事胜意',
-  '愿你被这世界温柔以待，高怡',
-  '生日快乐，高怡 🎂',
-  '—— 致最好的高怡 ——',
+const SUBTITLES = [                                // 轮播文案（真诚，不堆砌）
+  '很高兴认识你',
+  '认识你之后，我也开心了很多',
+  '生日快乐，高怡',
+  '祝你考研一定上岸',
+  '希望你以后轻松一点，也快乐一点',
 ];
 
 // 粒子形态循环（text 可多行；heart / cake / star 为图形）
@@ -1167,9 +1168,9 @@ function handleTap(x, y) {
         setTimeout(() => hideWishCard(), 4400);
         // ④ 卡片淡出后，追问「不知道你偷偷许了什么愿望呢？」
         setTimeout(() => playWonderText(), 5300);
-        setTimeout(() => hideWonderText(), 9200);
+        setTimeout(() => hideWonderText(), 12200);
         // ⑤ 再进入下一幕
-        setTimeout(() => goNextScene(), 10100);
+        setTimeout(() => goNextScene(), 13100);
       }, WISH_SECONDS);
     } else {
       goNextScene();
