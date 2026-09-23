@@ -359,12 +359,19 @@ const octx = off.getContext('2d', { willReadFrequently: true });
 
 let W = 0, H = 0, dpr = 1, BW = 0, BH = 0;
 
-function resize() {
-  dpr = Math.min(window.devicePixelRatio || 1, QUALITY.dprCap);
+function measureViewport() {
   // 用 canvas 的实际渲染尺寸，避免移动端地址栏伸缩造成画面拉伸
   const rect = stage.getBoundingClientRect();
-  W = Math.max(1, Math.round(rect.width || window.innerWidth));
-  H = Math.max(1, Math.round(rect.height || window.innerHeight));
+  return {
+    w: Math.max(1, Math.round(rect.width || window.innerWidth)),
+    h: Math.max(1, Math.round(rect.height || window.innerHeight)),
+  };
+}
+
+function applySize(nw, nh) {
+  dpr = Math.min(window.devicePixelRatio || 1, QUALITY.dprCap);
+  W = nw;
+  H = nh;
   stage.width = Math.floor(W * dpr);
   stage.height = Math.floor(H * dpr);
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
@@ -382,6 +389,28 @@ function resize() {
   ctx.fillRect(0, 0, W, H);
   sctx.fillStyle = '#04020a';
   sctx.fillRect(0, 0, W, H);
+}
+
+function resize() {
+  const v = measureViewport();
+  applySize(v.w, v.h);
+}
+
+// 尺寸小幅变化（手机地址栏伸缩/轻微旋转）：只做等比缩放，
+// 保持文字形状稳定，不重新采样、不让粒子重飞一遍
+function softResize(nw, nh) {
+  if (!W || !H) { applySize(nw, nh); return; }
+  const sx = nw / W;
+  const sy = nh / H;
+  applySize(nw, nh);
+  for (const pt of particles) {
+    pt.x *= sx; pt.y *= sy;
+    pt.tx *= sx; pt.ty *= sy;
+  }
+  for (const f of fw) { f.x *= sx; f.y *= sy; }
+  for (const f of flames) { f.x *= sx; f.y *= sy; }
+  buildStars();
+  buildNebula();
 }
 
 /* ══════════════════════════════════════════════════════════════
@@ -594,16 +623,18 @@ class Particle {
       this.vy += Math.sin(ang) * swirl;
     }
 
-    // 鼠标斥力
-    const mdx = this.x - mx;
-    const mdy = this.y - my;
-    const d2 = mdx * mdx + mdy * mdy;
-    const R = 145;
-    if (d2 < R * R) {
-      const d = Math.sqrt(d2) || 0.001;
-      const f = (1 - d / R) * 2.6 * this.z;
-      this.vx += (mdx / d) * f;
-      this.vy += (mdy / d) * f;
+    // 鼠标斥力（手机上触摸会持续推开粒子、导致文字看起来"移动变形"，故手机禁用）
+    if (!IS_MOBILE) {
+      const mdx = this.x - mx;
+      const mdy = this.y - my;
+      const d2 = mdx * mdx + mdy * mdy;
+      const R = 145;
+      if (d2 < R * R) {
+        const d = Math.sqrt(d2) || 0.001;
+        const f = (1 - d / R) * 2.6 * this.z;
+        this.vx += (mdx / d) * f;
+        this.vy += (mdy / d) * f;
+      }
     }
 
     this.x += this.vx;
@@ -612,8 +643,9 @@ class Particle {
     this.alpha = 0.84 + 0.16 * Math.sin(t * 0.0015 * this.twinkle + this.phase);
   }
   draw(t) {
-    const wob = Math.sin(t * 0.0009 + this.phase) * 0.7 * this.z;
-    const wob2 = Math.cos(t * 0.0011 + this.phase * 1.4) * 0.7 * this.z;
+    const wobAmp = IS_MOBILE ? 0.32 : 0.7;
+    const wob = Math.sin(t * 0.0009 + this.phase) * wobAmp * this.z;
+    const wob2 = Math.cos(t * 0.0011 + this.phase * 1.4) * wobAmp * this.z;
     glow(this.sprite, this.x + wob, this.y + wob2, this.baseScale, this.alpha);
   }
 }
@@ -1074,7 +1106,8 @@ function frame(t) {
 
   /* ---- 主粒子（形态切换瞬间不施加涡旋，收敛更利落）---- */
   const since = et - lastShapeAt;
-  const swirl = since < 900 ? 0 : Math.min(1, (since - 900) / 1400) * 0.052;
+  const swirlMax = IS_MOBILE ? 0.026 : 0.052;
+  const swirl = since < 900 ? 0 : Math.min(1, (since - 900) / 1400) * swirlMax;
   for (const p of particles) {
     p.update(et, mouse.x, mouse.y, swirl);
     p.draw(et);
@@ -1344,29 +1377,38 @@ gateBtnEl.addEventListener('click', (e) => {
 /* ══════════════════════════════════════════════════════════════
    启动
    ══════════════════════════════════════════════════════════════ */
+let firstBoot = true;
+
 function boot() {
   resize();
   buildNebula();
   buildStars();
-  const limit = Math.min(W, H) * 0.62;
   particles = [];
   for (let i = 0; i < MAX_PARTICLES; i++) particles.push(new Particle());
-  // 初始从外围飞入
-  shapeIndex = 0;
-  morphTo(0, false);
-  lastShapeAt = 0;
-  startTime = 0;
-  hintShown = false;
-  finished = false;
-  blasted = false;
-  hideHint();
+
+  if (firstBoot) {
+    // 首次启动：从第一幕开始
+    firstBoot = false;
+    shapeIndex = 0;
+    startTime = 0;
+    lastShapeAt = 0;
+    hintShown = false;
+    finished = false;
+    blasted = false;
+    hideHint();
+  }
+  // 重建时保持当前这一幕，不让剧情重来
+  morphTo(shapeIndex, false);
+
   running = true;
   requestAnimationFrame(frame);
 
-  // 开场：三连发
-  setTimeout(() => burst(W * 0.24, H * 0.3, { type: 'peony', scale: 1.05 }), 420);
-  setTimeout(() => burst(W * 0.76, H * 0.26, { type: 'chrys', scale: 1.05 }), 780);
-  setTimeout(() => burst(W * 0.5, H * 0.16, { type: 'heart', scale: 1.15 }), 1200);
+  if (firstBoot === false && startTime === 0) {
+    // 开场：三连发烟花
+    setTimeout(() => burst(W * 0.24, H * 0.3, { type: 'peony', scale: 1.05 }), 420);
+    setTimeout(() => burst(W * 0.76, H * 0.26, { type: 'chrys', scale: 1.05 }), 780);
+    setTimeout(() => burst(W * 0.5, H * 0.16, { type: 'heart', scale: 1.15 }), 1200);
+  }
 }
 
 boot();
@@ -1375,15 +1417,30 @@ let rt;
 function handleViewportChange() {
   clearTimeout(rt);
   rt = setTimeout(() => {
-    running = false;
-    boot();
-  }, 260);
+    const v = measureViewport();
+    const dw = Math.abs(v.w - W);
+    const dh = Math.abs(v.h - H);
+    if (dw < 2 && dh < 2) return;                 // 尺寸没变，忽略
+    // 只有横竖屏切换这种大变化才重建（字号需要重新采样）
+    if (dw > 140 || dh > 220) {
+      running = false;
+      boot();
+    } else {
+      softResize(v.w, v.h);                       // 小幅变化 → 仅等比缩放，画面不重来
+    }
+  }, 280);
 }
 window.addEventListener('resize', handleViewportChange);
 window.addEventListener('orientationchange', () => {
-  // 旋转后尺寸变化有延迟，多等一会
+  // 旋转后尺寸变化有延迟，多等一会再重建
   clearTimeout(rt);
-  rt = setTimeout(() => { running = false; boot(); }, 480);
+  rt = setTimeout(() => {
+    const v = measureViewport();
+    if (Math.abs(v.w - W) > 60 || Math.abs(v.h - H) > 60) {
+      running = false;
+      boot();
+    }
+  }, 520);
 });
 if (window.visualViewport) {
   window.visualViewport.addEventListener('resize', handleViewportChange);
