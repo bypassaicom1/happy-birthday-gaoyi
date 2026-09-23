@@ -1337,15 +1337,12 @@ function goNextScene() {
   hideAllOverlays();
 
   if (next >= SHAPES.length) {
-    // 全部演完 → 自由观赏模式
+    // 全部演完 → 自动循环播放（不显示任何提示）
     finished = true;
     shapeIndex = 0;
+    lastShapeAt = nowEt;
     morphTo(0, true);
     volley();
-    setTimeout(() => {
-      showHint('已看完整个祝福 · 点击任意处放烟花', '🎆');
-      hintShown = true;
-    }, 2200);
     return;
   }
 
@@ -1417,11 +1414,18 @@ function frame(t) {
     showHint(sc.hint || '点击继续', sc.icon || '👆');
   }
 
-  /* ---- 全部演完后进入自由观赏：形态自动循环 ---- */
+  /* ---- 全部演完后：形态自动循环播放 ---- */
   if (finished && et - lastShapeAt > SHAPE_DURATION) {
     lastShapeAt = et;
     shapeIndex = (shapeIndex + 1) % SHAPES.length;
+    blasted = false;                                  // 重置，让蛋糕每轮都能再炸
     morphTo(shapeIndex, true);
+  }
+
+  /* ---- 循环模式下，蛋糕到点自动炸开 ---- */
+  if (finished && SHAPES[shapeIndex].kind === 'cake' && !blasted && since > SHAPE_DURATION * 0.55) {
+    blasted = true;
+    cakeBlast();
   }
 
   /* ---- 浮层看门狗：任何情况下卡住的浮层都会被强制隐藏 ---- */
