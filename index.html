@@ -1252,18 +1252,23 @@ let wishCardHideTimer = null;
 function showWishMoment() {
   wishingMode = true;
   clearTimeout(wishMomentHideTimer);
+  wishMomentEl.style.transition = '';
   wishMomentEl.style.display = 'flex';
   void wishMomentEl.offsetWidth;              // 强制重排，保证淡入过渡生效
   wishMomentEl.classList.add('show');
 }
 function hideWishMoment() {
   wishingMode = false;
-  wishMomentEl.classList.remove('show');
   clearTimeout(wishMomentHideTimer);
-  wishMomentHideTimer = setTimeout(() => {
-    // 淡出结束后彻底移出渲染（防止手机上残留）
-    if (!wishingMode) wishMomentEl.style.display = 'none';
-  }, 760);
+  wishMomentHideTimer = null;
+  // 立即消失：先关过渡再隐藏，避免任何淡出残留
+  wishMomentEl.style.transition = 'none';
+  wishMomentEl.classList.remove('show');
+  wishMomentEl.style.display = 'none';
+  // 下一帧恢复过渡（保证下次显示时仍有淡入效果）
+  requestAnimationFrame(() => {
+    wishMomentEl.style.transition = '';
+  });
 }
 function showWishCard() {
   clearTimeout(wishCardHideTimer);
