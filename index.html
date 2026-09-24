@@ -1791,9 +1791,11 @@ camera.position.set(3.2 * __camK, 2.4 * __camK, 5.2 * __camK);
                 }
             } else if (__hbPhase === 3) {
                 h.mat.opacity = 1;
-                // 最终定格：文字已聚合成形，这时把整体高亮打开
-                // （文字本身是加色混合的纯白点，曝光不影响它，只有泛光会让它更亮）
-                if (__hbGlow && !__hbGlowOn) { applyGlow(true); __hbGlowOn = true; }
+                // 最终定格：文字已聚合成形，这时把整体高亮打开。
+                // 必须"每帧重申"，不能用一次性标志：555 在蛋糕成型的那一刻
+                // 会把 bloomPass.strength 设回 0.7，如果那一下发生在文字定格之后，
+                // 就会把高亮覆盖掉（桌面端实测就踩到了这个时序问题）。
+                if (__hbGlow) { applyGlow(true); __hbGlowOn = true; }
                 // keep 模式下永久停留（不进入淡出）
                 if (!__hbKeep && el > __hbHold) __hbPhase = 4;
             } else if (__hbPhase === 4) {
