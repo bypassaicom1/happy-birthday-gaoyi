@@ -1479,6 +1479,21 @@ camera.position.set(3.2 * __camK, 2.4 * __camK, 5.2 * __camK);
         let __hbHold = 7.5;       // 停留时长
         let __hbKeep = false;     // true = 永久保留（不淡出）
         let __hbMode = 'burst';   // 'burst'=爆炸聚合 | 'fade'=直接淡入
+        let __hbGlow = false;     // true = 最终定格：整个画面高亮（文字最亮 + 蛋糕恢复光晕）
+        let __hbGlowOn = false;
+        // 最终定格的高亮参数。
+        // 说明：蛋糕粒子与所有场景材质都是加色混合、不受光的，
+        // 所以"把蛋糕点亮"实际只有两个有效旋钮：
+        //   ① bloomPass.strength —— 让蛋糕重新亮起光晕（文字期间被压到 0.3）
+        //   ② renderer.toneMappingExposure —— 整体提亮；
+        //      而粒子文字设了 toneMapped=false，不吃曝光 → 提亮蛋糕的同时文字不受影响
+        const HB_GLOW = { bloom: 0.72, exposure: 1.55 };
+
+        function applyGlow(on) {
+            const g = window.__HB_GLOW_OVERRIDE__ || HB_GLOW;
+            if (bloomPass) bloomPass.strength = on ? g.bloom : 0.7;
+            renderer.toneMappingExposure = on ? g.exposure : 1.0;
+        }
         const HB_CAM_DIST = 6.0;  // 文字悬浮在相机前方的距离
         const HB_CY = 1.35;       // 相对视线中心的高度偏移（抬到蛋糕上方，避免遮挡）
 
@@ -1671,6 +1686,9 @@ camera.position.set(3.2 * __camK, 2.4 * __camK, 5.2 * __camK);
             __hbHold = opts.hold || 6.5;
             __hbKeep = !!opts.keep;         // keep=true → 永久保留，不淡出
             __hbMode = opts.mode || 'burst';
+            // 新的文字开始时先把上一次的高亮复位，避免叠加
+            if (__hbGlowOn) { applyGlow(false); __hbGlowOn = false; }
+            __hbGlow = (opts.glow !== undefined) ? !!opts.glow : !!opts.keep;
             const h = __hb;
 
             if (__hbMode === 'fade') {
@@ -1773,9 +1791,13 @@ camera.position.set(3.2 * __camK, 2.4 * __camK, 5.2 * __camK);
                 }
             } else if (__hbPhase === 3) {
                 h.mat.opacity = 1;
+                // 最终定格：文字已聚合成形，这时把整体高亮打开
+                // （文字本身是加色混合的纯白点，曝光不影响它，只有泛光会让它更亮）
+                if (__hbGlow && !__hbGlowOn) { applyGlow(true); __hbGlowOn = true; }
                 // keep 模式下永久停留（不进入淡出）
                 if (!__hbKeep && el > __hbHold) __hbPhase = 4;
             } else if (__hbPhase === 4) {
+                if (__hbGlowOn) { applyGlow(false); __hbGlowOn = false; }
                 h.mat.opacity -= 0.02;
                 if (h.mat.opacity <= 0) {
                     h.mat.opacity = 0;
