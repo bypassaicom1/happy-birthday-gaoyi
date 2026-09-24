@@ -591,20 +591,49 @@
     setTimeout(startBlessFlow, 36900);
   }
 
-  /* ---------- 压轴祝福流程（纯粒子文字，可被快速预览参数触发）---------- */
+  /* ---------- 压轴祝福流程 ----------
+     窄屏（手机）策略：把长句拆成「短句」，依次单独展示（每次画面只有一行、
+     单行大字，每字 80-190px）→ 不是分行，而是分次，彻底解决手机看不清 */
   function startBlessFlow() {
+    const narrow = window.innerWidth < 700;
+    const MAX = 5;
+    const queue = [];
+    for (const lines of BLESS_LINES) {
+      const full = lines.join('');
+      if (narrow && full.length > MAX) {
+        const segs = [];
+        let cur = '';
+        for (const ch of full) {
+          cur += ch;
+          if ('，。！？、；：'.indexOf(ch) >= 0) { segs.push(cur); cur = ''; }
+        }
+        if (cur) segs.push(cur);
+        for (const seg of segs) {
+          if (seg.length <= MAX) {
+            queue.push(seg);
+          } else {
+            const n = Math.ceil(seg.length / MAX);
+            const per = Math.ceil(seg.length / n);
+            for (let i = 0; i < seg.length; i += per) queue.push(seg.slice(i, i + per));
+          }
+        }
+      } else {
+        queue.push(full);
+      }
+    }
+
     let idx = 0;
-    (function nextBless() {
-      if (idx >= BLESS_LINES.length) return;          // 演完即定格，不再循环
-      const lines = BLESS_LINES[idx++];
-      const isLast = idx >= BLESS_LINES.length;
+    (function nextPiece() {
+      if (idx >= queue.length) return;
+      const piece = queue[idx++];
+      const isLast = idx >= queue.length;
       if (window.__PARTICLE_BURST__) {
         window.__PARTICLE_BURST__(
-          lines,
-          isLast ? { mode: 'burst', keep: true } : { mode: 'fade', hold: 3.6 }
+          [piece],
+          isLast ? { mode: 'burst', keep: true } : { mode: 'fade', hold: 3.0 }
         );
       }
-      if (!isLast) setTimeout(nextBless, 5400);
+      if (!isLast) setTimeout(nextPiece, 4600);
     })();
   }
 
