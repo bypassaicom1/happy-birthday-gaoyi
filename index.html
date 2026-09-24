@@ -82,6 +82,16 @@
     animation: gateGlow 2.6s ease-in-out infinite; transition: transform .25s ease;
   }
   .gate-btn:hover { transform: translateY(-2px) scale(1.05); }
+  /* —— 背景音乐加载中的按钮状态 —— */
+  .gate-btn.loading,
+  .gate-btn.loading:hover,
+  .gate-btn:disabled {
+    opacity: .66; cursor: default; transform: none;
+    border-color: rgba(255, 190, 220, .26);
+    animation: btnBreath 2.2s ease-in-out infinite;
+  }
+  @keyframes btnBreath { 0%,100% { opacity: .5; } 50% { opacity: .8; } }
+  .gate-btn.ready { animation: gateGlow 2.6s ease-in-out infinite; }
   @keyframes gateGlow {
     0%,100% { box-shadow: 0 0 26px rgba(255,107,157,.35), inset 0 0 18px rgba(255,180,220,.12); }
     50% { box-shadow: 0 0 44px rgba(255,107,157,.62), inset 0 0 26px rgba(255,180,220,.2); }
@@ -315,7 +325,7 @@
   <div class="gate-icon">🎂</div>
   <div class="gate-title" id="gateTitle">高怡，生日快乐</div>
   <div class="gate-sub" id="gateSub">你的好友小李给你的祝福</div>
-  <button class="gate-btn" id="gateBtn">🕯️ 点亮你的蜡烛</button>
+  <button class="gate-btn loading" id="gateBtn" disabled>🎵 正在加载音乐…</button>
 </div>
 
 <!-- 底部字幕轮播 -->
@@ -426,6 +436,174 @@
 
   $('gateTitle').textContent = GATE_TITLE;
   $('gateSub').textContent = GATE_SUB;
+
+  /* ══════════ 背景音乐预加载闸门 ══════════
+     音乐没准备好就开始，会出现"画面已经走到祝福了、音乐才响起来"的脱节，
+     甚至点了没声音。所以这里先等 333.mp3 完整下载完再放行：
+       · 期间按钮 disabled，并拦截 window 上的 click/touchstart
+         （555 的粒子聚合动画正是监听在 window 上，不拦的话提前点一下
+          蛋糕就会先自己聚合，整条时间线抢跑）
+       · 按钮上显示下载百分比，等待原因一目了然
+       · 兜底：加载失败或等待超时 → 仍然放行，绝不把人卡在这一屏
+     ══════════════════════════════════════════ */
+  const MUSIC_SRC = './333.mp3';
+  const BTN_READY = '🕯️ 点亮你的蜡烛';
+  const BTN_LOADING = '🎵 正在加载音乐';
+  const MUSIC_WAIT_LIMIT = 45000;      // 最长等 45 秒，超时兜底放行
+  // 两个独立状态，务必分开：
+  //   gateOpen  = 用户能不能点（闸门是否已放行）
+  //   musicGood = 音乐是否真的就绪
+  // 早先用单个 musicReady 标志，兜底一触发就把它置为已处理，
+  // 结果后来 fetch 真的下载完了也再没法点亮按钮 —— 按钮永久 disabled。
+  let gateOpen = false;
+  let musicGood = false;
+  // 诊断对象：把闸门的真实状态暴露出来，便于验证与排查（不影响功能）
+  const MUSIC_DIAG = window.__MUSIC_GATE__ = {
+    armed: false, blockHits: 0, blockStopped: 0,
+    state: 'init', pct: 0, got: 0, total: 0, why: '', fetchState: 'none',
+  };
+
+  function setGateBtn(state, pct) {
+    gateBtnEl.classList.remove('loading', 'ready');
+    MUSIC_DIAG.state = state;
+    if (typeof pct === 'number') MUSIC_DIAG.pct = pct;
+    if (state === 'loading') {
+      gateBtnEl.classList.add('loading');
+      gateBtnEl.disabled = true;
+      gateBtnEl.textContent = BTN_LOADING + (typeof pct === 'number' ? ' ' + pct + '%' : '…');
+      return;
+    }
+    gateBtnEl.disabled = false;
+    gateBtnEl.classList.add('ready');
+    gateBtnEl.textContent = state === 'failed' ? '🕯️ 音乐未就绪，也可以开始' : BTN_READY;
+  }
+
+  function earlyBlock(e) {
+    // 按钮类元素不拦：闸门只管"别让 555 提前开始聚合"
+    const t = e.target;
+    MUSIC_DIAG.blockHits++;
+    if (t === gateBtnEl || t === musicBtn || (musicBtn && musicBtn.contains(t))) return;
+    // 必须用 stopImmediatePropagation：
+    // 555 的启动监听是 window.addEventListener('click', startAnimation)（冒泡阶段），
+    // 和这里的拦截器同在 window 上。stopPropagation 只挡"跨节点传播"，
+    // 同一节点上的其它监听器照样执行 → 蛋糕会在加载期间就自己聚合。
+    MUSIC_DIAG.blockStopped++;
+    e.stopImmediatePropagation();
+    e.preventDefault();
+  }
+  function armEarlyBlock(on) {
+    MUSIC_DIAG.armed = on;
+    const fn = on ? window.addEventListener : window.removeEventListener;
+    fn.call(window, 'click', earlyBlock, true);
+    fn.call(window, 'touchstart', earlyBlock, true);
+    fn.call(document, 'click', earlyBlock, true);
+    fn.call(document, 'touchstart', earlyBlock, true);
+  }
+
+  function markMusicReady(why) {
+    if (musicGood) return;
+    musicGood = true;
+    gateOpen = true;                     // 就绪信号永远可以把"超时放行"升级回"就绪"
+    MUSIC_DIAG.why = why;
+    armEarlyBlock(false);
+    setGateBtn('ready');
+    console.log('[背景音乐已就绪] ' + why);
+  }
+
+  // 兜底放行（超时 / 出错 / 浏览器不支持）：让人能继续，但绝不锁死闸门
+  function openGateAnyway(why) {
+    if (gateOpen) return;
+    gateOpen = true;
+    MUSIC_DIAG.why = why;
+    armEarlyBlock(false);
+    setGateBtn('failed');
+    console.log('[闸门兜底放行] ' + why);
+  }
+
+  // 判断"是不是已经完整缓冲完了"（缓存命中的情况，直接放行、不闪加载态）
+  function isFullyBuffered() {
+    if (bgm.readyState < 4 || !bgm.duration) return false;
+    try {
+      for (let i = 0; i < bgm.buffered.length; i++) {
+        if (bgm.buffered.end(i) >= bgm.duration - 0.3) return true;
+      }
+    } catch (e) { /* ignore */ }
+    return false;
+  }
+
+  // 主路径：用 fetch 完整下载 → blob URL。
+  // 为什么不用 <audio preload="auto"> 等 canplaythrough：
+  //   ① iOS Safari 会忽略 preload，不等到用户手势就不真正缓冲，那样闸门会一直卡住；
+  //   ② canplaythrough 只代表"够播了"，不等于"下完了"，而要求是加载完毕。
+  // fetch 不受媒体元素的预加载策略限制，还能拿到精确百分比。
+  function preloadMusic() {
+    setGateBtn('loading');
+    armEarlyBlock(true);
+
+    if (isFullyBuffered()) { markMusicReady('已在缓存中'); return; }
+
+    let fetchState = 'unsupported';    // running | done | failed | unsupported
+    let poll = null;
+
+    if (window.fetch && window.URL && URL.createObjectURL) {
+      fetchState = 'running';
+      MUSIC_DIAG.fetchState = fetchState;
+      fetch(MUSIC_SRC).then(function (res) {
+        if (!res.ok) throw new Error('HTTP ' + res.status);
+        const total = Number(res.headers.get('content-length')) || 0;
+        MUSIC_DIAG.total = total;
+        if (!res.body || !res.body.getReader || !total) return res.blob();
+        const reader = res.body.getReader();
+        const chunks = [];
+        let got = 0, lastPct = -1;
+        return (function pump() {
+          return reader.read().then(function (r) {
+            if (r.done) return new Blob(chunks, { type: 'audio/mpeg' });
+            chunks.push(r.value);
+            got += r.value.length;
+            MUSIC_DIAG.got = got;
+            const pct = Math.min(99, Math.floor(got / total * 100));
+            if (pct !== lastPct) { lastPct = pct; setGateBtn('loading', pct); }
+            return pump();
+          });
+        })();
+      }).then(function (blob) {
+        fetchState = 'done';
+        MUSIC_DIAG.fetchState = fetchState;
+        if (musicGood) return;                             // 已经就绪，不必再动
+        if (!blob || !blob.size) throw new Error('下载内容为空');
+        // 只有在音乐还没开始播放时才替换音源，否则会把正在播的音乐重启
+        if (bgm.paused) { bgm.src = URL.createObjectURL(blob); bgm.load(); }
+        markMusicReady('完整下载 ' + Math.round(blob.size / 1024) + ' KB');
+      }).catch(function (err) {
+        fetchState = 'failed';
+        MUSIC_DIAG.fetchState = fetchState;
+        console.log('[fetch 预加载失败，回退到媒体元素] ' + err.message);
+      });
+    } else {
+      openGateAnyway('浏览器不支持 fetch 预加载');    // 干脆不等，直接放行
+    }
+
+    // 回退路径：只有 fetch 不可用或失败时，才认媒体元素自己的就绪信号
+    function fallbackAllowed() { return fetchState === 'failed' || fetchState === 'unsupported'; }
+    bgm.addEventListener('canplaythrough', function () {
+      if (fallbackAllowed()) markMusicReady('canplaythrough（回退路径）');
+    });
+    bgm.addEventListener('error', function () {
+      if (fallbackAllowed()) openGateAnyway('媒体元素报错 ' + (bgm.error && bgm.error.code));
+    });
+    poll = setInterval(function () {
+      if (musicGood) { clearInterval(poll); return; }
+      if (fallbackAllowed() && bgm.readyState >= 4) { clearInterval(poll); markMusicReady('readyState=4（回退路径）'); }
+    }, 400);
+
+    // 最后兜底：超时放行，绝不把页面卡死（注意只是放行，不算"就绪"）
+    setTimeout(function () {
+      if (!gateOpen) openGateAnyway('等待超过 ' + (MUSIC_WAIT_LIMIT / 1000) + ' 秒');
+    }, MUSIC_WAIT_LIMIT);
+  }
+
+  preloadMusic();
 
   /* ---------- 字幕轮播 ---------- */
   SUBTITLES.forEach(function (s, i) {
@@ -735,6 +913,7 @@
   }
   gateBtnEl.addEventListener('click', function (e) {
     e.stopPropagation();
+    if (!gateOpen) return;        // 双保险：闸门没放行就绝不进入
     enter();
   });
 
