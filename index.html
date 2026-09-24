@@ -1369,6 +1369,32 @@ camera.position.set(3.2 * __camK, 2.4 * __camK, 5.2 * __camK);
         function buildBurstFor(lines) {
             disposeHappy();
 
+            // 手机竖屏：长句自动拆成两行 → 字号翻倍，笔画才看得清
+            if (window.innerWidth < window.innerHeight) {
+                const out = [];
+                for (const ln of lines) {
+                    if (ln.length > 6) {
+                        // 优先按标点拆分
+                        const parts = [];
+                        let cur = '';
+                        for (const ch of ln) {
+                            cur += ch;
+                            if ('，。！？、；：'.indexOf(ch) >= 0) { parts.push(cur); cur = ''; }
+                        }
+                        if (cur) parts.push(cur);
+                        if (parts.length > 1 && parts.length <= 3) {
+                            for (const pt of parts) out.push(pt);
+                        } else {
+                            const half = Math.ceil(ln.length / 2);
+                            out.push(ln.slice(0, half), ln.slice(half));
+                        }
+                    } else {
+                        out.push(ln);
+                    }
+                }
+                lines = out;
+            }
+
             const CW = 1024;
             const c = document.createElement('canvas');
             const g = c.getContext('2d');
@@ -1384,10 +1410,11 @@ camera.position.set(3.2 * __camK, 2.4 * __camK, 5.2 * __camK);
             g.fillStyle = '#fff';
             g.textAlign = 'center';
             g.textBaseline = 'middle';
-            g.font = fontOf(170);
+            const fsMax = latin ? 210 : 250;          // 字号上限提高 → 字更大
+            g.font = fontOf(fsMax);
             let maxW = 0;
             lines.forEach(function (ln) { maxW = Math.max(maxW, g.measureText(ln).width); });
-            const fs = Math.min(latin ? 170 : 150, (latin ? 170 : 150) * (CW * 0.92) / maxW);
+            const fs = Math.min(fsMax, fsMax * (CW * 0.92) / maxW);
             const lineH = fs * 1.16;
             const blockH = lines.length * lineH;
             // ② 按文字实际高度设定画布（紧凑无多余空白 → 世界尺寸不被虚高撑大）
