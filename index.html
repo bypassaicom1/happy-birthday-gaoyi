@@ -569,7 +569,7 @@ const IS_MOBILE =
 
 const QUALITY = IS_MOBILE
   ? {
-      maxParticles: 3000,   // 手机粒子数（桌面 6200）
+      maxParticles: 3900,   // 手机粒子数（复杂形状如蛋糕需要更密）
       dprCap: 1.3,          // 限制渲染分辨率，省 GPU
       bloom: false,         // 手机不做泛光后处理（最耗性能的一步）
       starsDivisor: 15000,  // 星星更稀疏
@@ -579,7 +579,7 @@ const QUALITY = IS_MOBILE
       nebulaHalf: true,     // 星云半分辨率
     }
   : {
-      maxParticles: 6200,
+      maxParticles: 7400,
       dprCap: 2,
       bloom: true,
       starsDivisor: 7000,
@@ -745,22 +745,45 @@ function drawStar(g, cx, cy, r) {
 }
 
 function drawCake(g, cx, cy, size) {
-  const w = size, h = size * 0.8;
-  const x0 = cx - w / 2, y0 = cy - h / 2 + h * 0.1;
-  // 盘子
+  const w = size;
+  const h = size * 0.82;
+  const seam = Math.max(3, size * 0.017);        // 层间缝隙（让层次分明）
+  const bottomY = cy + h * 0.44;
+
+  // 三层：底宽顶窄，层与层之间留缝
+  const layers = [
+    { wid: 0.96, hei: 0.30 },   // 底层（最宽）
+    { wid: 0.76, hei: 0.26 },   // 中层
+    { wid: 0.54, hei: 0.22 },   // 顶层
+  ];
+  const rects = [];
+  let y = bottomY;
+  for (const L of layers) {
+    const lw = w * L.wid;
+    const lh = h * L.hei;
+    const ly = y - lh;
+    rects.push({ x: cx - lw / 2, y: ly, w: lw, h: lh });
+    g.fillRect(cx - lw / 2, ly, lw, lh);
+    y = ly - seam;                              // 上一层起点（留出缝隙）
+  }
+
+  // 盘子（与底层之间也留缝）
   g.beginPath();
-  g.ellipse(cx, y0 + h * 0.98, w * 0.56, h * 0.075, 0, 0, Math.PI * 2);
+  g.ellipse(cx, bottomY + seam * 2.1, w * 0.54, h * 0.055, 0, 0, Math.PI * 2);
   g.fill();
-  // 三层蛋糕
-  g.fillRect(x0 + w * 0.03, y0 + h * 0.6, w * 0.94, h * 0.34);
-  g.fillRect(x0 + w * 0.13, y0 + h * 0.32, w * 0.74, h * 0.28);
-  g.fillRect(x0 + w * 0.24, y0 + h * 0.08, w * 0.52, h * 0.24);
-  // 蜡烛
-  g.fillRect(cx - w * 0.022, y0 - h * 0.16, w * 0.044, h * 0.25);
-  // 烛焰
+
+  // 蜡烛（加粗，与顶层留缝）
+  const ch = h * 0.26;
+  const cw = Math.max(7, w * 0.055);
+  const candleTop = y - h * 0.015;
+  g.fillRect(cx - cw / 2, candleTop - ch, cw, ch);
+
+  // 烛焰（明显）
   g.beginPath();
-  g.ellipse(cx, y0 - h * 0.21, w * 0.05, h * 0.075, 0, 0, Math.PI * 2);
+  g.ellipse(cx, candleTop - ch - h * 0.055, w * 0.045, h * 0.07, 0, 0, Math.PI * 2);
   g.fill();
+
+  return rects;   // 供定位文字使用
 }
 
 function sampleShape(shape) {
@@ -808,18 +831,20 @@ function sampleShape(shape) {
   } else if (shape.kind === 'cake') {
     const size = Math.min(W * 0.58, H * 0.56);
     const ccy = shapeCenterY() * 1.02;
-    drawCake(octx, W / 2, ccy, size);
-    // 在蛋糕体上"刻"出文字（挖空 → 负空间呈现文字）
-    if (shape.lines && shape.lines.length) {
-      const fs = Math.min(size * 0.125, W * 0.12);
+    const rects = drawCake(octx, W / 2, ccy, size);
+    // 在底层（最宽的那层）上"刻"字，既清晰又不破坏层次
+    if (shape.lines && shape.lines.length && rects.length) {
+      const base = rects[0];
+      const fs = Math.min(base.w * 0.17, base.h * 0.62);
       octx.save();
       octx.globalCompositeOperation = 'destination-out';
       octx.font = fontStr(fs);
-      octx.fillText(shape.lines[0], W / 2, ccy + size * 0.05);
+      octx.fillText(shape.lines[0], W / 2, base.y + base.h * 0.5);
       octx.restore();
       octx.globalCompositeOperation = 'source-over';
     }
-    gap = Math.max(3, Math.round((size / 145) * QUALITY.grainGap));
+    // 采样更密，保证蛋糕细节（层、蜡烛、盘子）完整呈现
+    gap = Math.max(3, Math.round((size / 190) * QUALITY.grainGap));
   }
 
   const img = octx.getImageData(0, 0, W, H).data;
@@ -974,11 +999,21 @@ function shapeCenterY() {
 }
 
 function cakeGeom() {
-  const size = Math.min(W * 0.56, H * 0.54);
+  const size = Math.min(W * 0.58, H * 0.56);   // 与 sampleShape 保持一致
   const cy = shapeCenterY() * 1.02;
-  const h = size * 0.8;
-  const y0 = cy - h / 2 + h * 0.1;
-  return { cx: W / 2, cy, size, h, y0, flameX: W / 2, flameY: y0 - h * 0.21 };
+  const h = size * 0.82;
+  const seam = Math.max(3, size * 0.017);
+  const bottomY = cy + h * 0.44;
+  // 三层总高 + 两道缝隙
+  const layersH = h * (0.30 + 0.26 + 0.22) + seam * 2;
+  const topOfLayers = bottomY - layersH;
+  const candleTop = topOfLayers - h * 0.015;
+  const ch = h * 0.26;
+  return {
+    cx: W / 2, cy, size, h, bottomY,
+    flameX: W / 2,
+    flameY: candleTop - ch - h * 0.055,   // 烛火粒子正好落在火焰处
+  };
 }
 
 // ---- 烛火粒子 ----
