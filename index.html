@@ -1466,8 +1466,8 @@ camera.position.set(3.2 * __camK, 2.4 * __camK, 5.2 * __camK);
             g.strokeStyle = '#fff';
             g.lineJoin = 'round';
             g.lineCap = 'round';
-            // 描边增粗笔画（+7%）→ 手机上笔画也有足够采样点，字形才立得住
-            g.lineWidth = Math.max(4, fs * 0.07);
+            // 描边大幅增粗（+18%）→ 手机上笔画从 5px 增至约 6.5px，容纳更多采样点
+            g.lineWidth = Math.max(6, fs * 0.18);
             g.textAlign = 'center';
             g.textBaseline = 'middle';
             g.font = fontOf(fs);
@@ -1493,7 +1493,8 @@ camera.position.set(3.2 * __camK, 2.4 * __camK, 5.2 * __camK);
             const targetSpacingPx = screenW > 900 ? 2.6 : 1.2;
             const gap = Math.max(2, Math.min(10, Math.round(CW * targetSpacingPx / textPx)));
             const spacing = textW * gap / CW;
-            const baseSize = spacing * 1.5;    // 点略大于间距 → 笔画连续、边缘锐利
+            // 点径约 = 笔画宽的 40%（手机笔画 6.5px → 点 2.6px），既不糊又能填实笔画
+            const baseSize = spacing * (screenW > 900 ? 1.5 : 2.2);
             const targets = [];
             for (let y = 0; y < CH; y += gap) {
                 for (let x = 0; x < CW; x += gap) {
