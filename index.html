@@ -135,7 +135,27 @@
   @keyframes cursorBlink { 50% { opacity: 0; } }
   .msg-card.done .mc-title { opacity: 1; }
 
-  /* 聚合过程中的悬念文案（空旷的上方，可稍醒目）*/
+  /* ===== 大屏清晰文本（粒子成型后替换显示，保证可读性）===== */
+  #bigText {
+    position: fixed; left: 50%; top: 21%; z-index: 36;
+    transform: translate(-50%, -50%);
+    opacity: 0; pointer-events: none; text-align: center;
+    max-width: 94vw;
+    font-family: "Microsoft YaHei","PingFang SC",sans-serif;
+    transition: opacity .55s ease;
+  }
+  #bigText.show { opacity: 1; }
+  #bigText .line {
+    font-size: 48px; font-weight: 700; letter-spacing: 5px; line-height: 1.42;
+    color: #fff;
+    text-shadow:
+      0 0 16px rgba(255,190,225,.95),
+      0 0 40px rgba(255,140,200,.78),
+      0 0 84px rgba(200,120,255,.5);
+  }
+  #bigText .line + .line { margin-top: 4px; }
+
+  /* ===== 聚合过程中的悬念文案（空旷的上方，可稍醒目）*/
   #guessMsg .mc-text { font-size: 20px; letter-spacing: 3px; }
   #guessMsg .mc-icon { font-size: 34px; margin-bottom: 10px; animation: wishCandle 3.4s ease-in-out infinite; }
 
@@ -213,6 +233,8 @@
     #wishMsg .mc-text { font-size: 18px; letter-spacing: 2.5px; }
     #wishMsg .mc-icon { font-size: 38px; }
     .mc-count { font-size: 34px; margin-top: 12px; }
+    #bigText { top: 18%; max-width: 96vw; }
+    #bigText .line { font-size: 34px; letter-spacing: 3px; line-height: 1.4; }
     #guessMsg .mc-text { font-size: 15.5px; letter-spacing: 2px; }
     #guessMsg .mc-icon { font-size: 26px; margin-bottom: 8px; }
     #yesMsg .mc-text { font-size: 16.5px; letter-spacing: 2px; }
@@ -309,6 +331,9 @@
   <div class="mc-icon">🌷</div>
   <div class="mc-text"><span id="blessLine"></span><span class="mc-cursor" id="blessCursor" style="display:none"></span></div>
 </div>
+
+<!-- 大屏清晰文本（粒子成型后替换，保证任何屏幕都看得清）-->
+<div id="bigText"></div>
 
 <!-- 音乐控件 -->
 <button id="musicBtn" title="背景音乐开关">🔈</button>
@@ -422,6 +447,18 @@
     timers.length = 0;
   }
 
+  /* ---------- 大屏清晰文本（粒子成型后替换显示）---------- */
+  const bigTextEl = document.getElementById('bigText');
+  function showBigText(lines) {
+    bigTextEl.innerHTML = lines.map(function (l) {
+      return '<div class="line">' + l + '</div>';
+    }).join('');
+    bigTextEl.classList.add('show');
+  }
+  function hideBigText() {
+    bigTextEl.classList.remove('show');
+  }
+
   /* ---------- 许愿倒计时（3 秒）---------- */
   let beepCtx = null;
   function beep(freq, vol) {
@@ -529,20 +566,29 @@
       });
     }, 28700);
 
-    // ⑤ 压轴祝福：前 4 句「淡入 → 停留 3.6s → 淡出」，最后一句「💥爆炸 → 永久定格」
+    // ⑤ 压轴祝福：粒子负责视觉冲击（爆炸 / 淡入），成型后换成清晰文本供阅读
     setTimeout(function () {
       let idx = 0;
       (function nextBless() {
         if (idx >= BLESS_LINES.length) return;          // 演完即定格，不再循环
         const lines = BLESS_LINES[idx++];
         const isLast = idx >= BLESS_LINES.length;
-        if (window.__PARTICLE_BURST__) {
-          window.__PARTICLE_BURST__(
-            lines,
-            isLast ? { mode: 'burst', keep: true } : { mode: 'fade', hold: 3.6 }
-          );
+
+        if (isLast) {
+          // 最后一句：粒子爆炸 → 短暂停留 → 淡出，随后由清晰文本永久定格
+          if (window.__PARTICLE_BURST__) window.__PARTICLE_BURST__(lines, { mode: 'burst', hold: 2.2 });
+          setTimeout(function () { showBigText(lines); }, 2400);
+          return;
         }
-        if (!isLast) setTimeout(nextBless, 5400);
+
+        // 前 4 句：粒子淡入 → 粒子淡出 + 清晰文本淡入 → 停留 3.4s → 文本淡出
+        if (window.__PARTICLE_BURST__) window.__PARTICLE_BURST__(lines, { mode: 'fade', hold: 1.6 });
+        setTimeout(function () {
+          if (window.__HIDE_BURST__) window.__HIDE_BURST__();   // 粒子退场
+          showBigText(lines);                                    // 清晰文本登场
+        }, 1500);
+        setTimeout(hideBigText, 4900);
+        setTimeout(nextBless, 5600);
       })();
     }, 36900);
   }
@@ -1516,7 +1562,6 @@ camera.position.set(3.2 * __camK, 2.4 * __camK, 5.2 * __camK);
             h.points.quaternion.copy(camera.quaternion);
         }
 
-        // 触发一次文字爆炸
         window.__PARTICLE_BURST__ = function (lines, opts) {
             opts = opts || {};
             buildBurstFor(Array.isArray(lines) ? lines : [String(lines)]);
@@ -1563,9 +1608,14 @@ camera.position.set(3.2 * __camK, 2.4 * __camK, 5.2 * __camK);
             attachHappyToCamera();
             __hbPhase = 1;
             __hbT0 = (performance.now() - animStartTime) / 1000;
-            // 蛋糕保持全亮（文字靠自身高对比度清晰，不靠压暗蛋糕）
-            // Bloom 只轻微压低：既避免糊文字，又让蛋糕保留光晕
+            // 文字展示时让蛋糕保持全亮（文字靠自身高对比度清晰）
             if (bloomPass) bloomPass.strength = 0.42;
+        };
+
+        // 手动让粒子文字退场（叠加层在替换为清晰文本时调用）
+        window.__HIDE_BURST__ = function () {
+            if (!__hb || __hbPhase === 0) return;
+            __hbPhase = 4;
         };
 
         function updateHappyBurst(tSec) {
