@@ -1463,11 +1463,20 @@ camera.position.set(3.2 * __camK, 2.4 * __camK, 5.2 * __camK);
 
             c.width = CW; c.height = CH;
             g.fillStyle = '#fff';
+            g.strokeStyle = '#fff';
+            g.lineJoin = 'round';
+            g.lineCap = 'round';
+            // 描边增粗笔画（+7%）→ 手机上笔画也有足够采样点，字形才立得住
+            g.lineWidth = Math.max(4, fs * 0.07);
             g.textAlign = 'center';
             g.textBaseline = 'middle';
             g.font = fontOf(fs);
             const startY = CH / 2 - ((lines.length - 1) * lineH) / 2;
-            lines.forEach(function (ln, i) { g.fillText(ln, CW / 2, startY + i * lineH); });
+            lines.forEach(function (ln, i) {
+                const yy = startY + i * lineH;
+                g.fillText(ln, CW / 2, yy);
+                g.strokeText(ln, CW / 2, yy);
+            });
 
             const img = g.getImageData(0, 0, CW, CH).data;
 
@@ -1477,13 +1486,14 @@ camera.position.set(3.2 * __camK, 2.4 * __camK, 5.2 * __camK);
             const textW = Math.min(9.0, visW * 0.96);
             const textH = textW * (CH / CW);
 
-            // 自适应采样：让屏幕上相邻粒子的间距尽量小 → 笔画由密集小点勾勒，锐利清晰
+            // 自适应采样：手机上文字只有 ~53px/字，必须把采样间距压到 1.2px
+            // 才有足够多的点勾勒笔画（配合描边增粗 + 定点尺寸）
             const screenW = window.innerWidth || 1280;
-            const textPx = screenW * 0.98;
-            const targetSpacingPx = screenW > 900 ? 3 : 2.5;   // 更密（原来 5px 太疏）
+            const textPx = screenW * 1.0;
+            const targetSpacingPx = screenW > 900 ? 2.6 : 1.2;
             const gap = Math.max(2, Math.min(10, Math.round(CW * targetSpacingPx / textPx)));
             const spacing = textW * gap / CW;
-            const baseSize = spacing * 1.8;    // 点相互重叠 → 笔画实心化 + 加色叠加更亮
+            const baseSize = spacing * 1.5;    // 点略大于间距 → 笔画连续、边缘锐利
             const targets = [];
             for (let y = 0; y < CH; y += gap) {
                 for (let x = 0; x < CW; x += gap) {
