@@ -1475,6 +1475,7 @@ camera.position.set(3.2 * __camK, 2.4 * __camK, 5.2 * __camK);
         let __hb = null;
         let __hbPhase = 0;        // 0=idle 1=explode 2=gather 2.5=fadeIn 3=hold 4=fadeOut
         let __hbT0 = 0;
+        let __hbLastT = 0;        // 上一帧时间 → 用来把聚合速度换算成"按时间收敛"
         let __hbHold = 7.5;       // 停留时长
         let __hbKeep = false;     // true = 永久保留（不淡出）
         let __hbMode = 'burst';   // 'burst'=爆炸聚合 | 'fade'=直接淡入
@@ -1687,6 +1688,7 @@ camera.position.set(3.2 * __camK, 2.4 * __camK, 5.2 * __camK);
                 attachHappyToCamera();
                 __hbPhase = 2.5;
                 __hbT0 = (performance.now() - animStartTime) / 1000;
+                __hbLastT = __hbT0;
                 if (bloomPass) bloomPass.strength = 0.3;   // 泛光压低：辉光会把相邻的点糊成一片
                 return;
             }
@@ -1710,6 +1712,7 @@ camera.position.set(3.2 * __camK, 2.4 * __camK, 5.2 * __camK);
             attachHappyToCamera();
             __hbPhase = 1;
             __hbT0 = (performance.now() - animStartTime) / 1000;
+            __hbLastT = __hbT0;
             // 文字展示时让蛋糕保持全亮（文字靠自身高对比度清晰）
             if (bloomPass) bloomPass.strength = 0.3;   // 泛光压低：辉光会把相邻的点糊成一片
         };
@@ -1725,6 +1728,14 @@ camera.position.set(3.2 * __camK, 2.4 * __camK, 5.2 * __camK);
             const h = __hb;
             const el = tSec - __hbT0;
             const pos = h.pos;
+            // ★ 按时间收敛，而不是按帧：
+            //   原来每帧固定插值 8.5%，在只有 5~15fps 的低端手机上，
+            //   相位切换的兜底计时器会先触发，粒子文字就"聚到一半被冻住"。
+            //   这里用实际帧间隔把系数换算成等效 60fps 的步长，
+            //   于是无论设备多少帧，都在大约 1 秒内聚合成形。
+            const dt = Math.max(0, Math.min(0.25, tSec - __hbLastT));
+            __hbLastT = tSec;
+            const kGather = 1 - Math.pow(1 - 0.085, Math.max(1, dt * 60));
 
             if (__hbPhase === 1) {
                 for (let i = 0; i < h.N; i++) {
@@ -1747,9 +1758,9 @@ camera.position.set(3.2 * __camK, 2.4 * __camK, 5.2 * __camK);
                     const dx = t.tx - pos[i * 3];
                     const dy = t.ty - pos[i * 3 + 1];
                     const dz = t.tz - pos[i * 3 + 2];
-                    pos[i * 3] += dx * 0.085;
-                    pos[i * 3 + 1] += dy * 0.085;
-                    pos[i * 3 + 2] += dz * 0.085;
+                    pos[i * 3] += dx * kGather;
+                    pos[i * 3 + 1] += dy * kGather;
+                    pos[i * 3 + 2] += dz * kGather;
                     if (Math.abs(dx) > 0.03 || Math.abs(dy) > 0.03) settled = false;
                 }
                 if (settled || el > 3.4) __hbPhase = 3;
