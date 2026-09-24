@@ -97,8 +97,8 @@
   #subs.show { opacity: 1; }
   #subs .sub-line {
     position: absolute; left: 0; right: 0; opacity: 0;
-    font-size: 15px; letter-spacing: 4px; color: #ffd6e8;
-    text-shadow: 0 0 14px rgba(255,140,190,.85), 0 0 34px rgba(200,140,255,.5);
+    font-size: 17px; letter-spacing: 4px; color: #ffe2ef;
+    text-shadow: 0 1px 3px rgba(0,0,0,.95), 0 0 10px rgba(0,0,0,.8), 0 0 16px rgba(255,140,190,.6);
   }
   @keyframes subFade {
     0% { opacity: 0; transform: translateY(8px); }
@@ -113,19 +113,26 @@
     position: fixed; left: 50%; top: 9%; z-index: 30;
     display: none; transform: translate(-50%, -16px) scale(.97);
     opacity: 0; pointer-events: none; text-align: center;
-    max-width: 84vw;
+    /* ★ 必须显式给宽度：position:fixed + left:50% 时，fit-content 的可用宽度
+       只剩"右边那一半"（手机上 = 195px），max-width 永远轮不到生效，
+       文案就被迫在半屏里折行。max-content + max-width 才能撑满可用宽度。*/
+    width: max-content; max-width: 84vw;
     font-family: "Microsoft YaHei","PingFang SC",sans-serif;
     transition: opacity .85s ease, transform .85s cubic-bezier(.2,.9,.3,1.25);
   }
   .msg-card.show { opacity: 1; transform: translate(-50%, 0) scale(1); }
   .msg-card .mc-icon { font-size: 34px; margin-bottom: 10px; }
-  .msg-card .mc-title { font-size: 13px; letter-spacing: 3px; color: rgba(255,228,240,.82); margin-bottom: 8px; }
+  .msg-card .mc-title { font-size: 15px; letter-spacing: 3px; color: rgba(255,228,240,.92); margin-bottom: 8px; }
   .msg-card .mc-text {
-    font-size: 19px; font-weight: 600; letter-spacing: 2.5px; line-height: 1.85;
+    font-size: 21px; font-weight: 700; letter-spacing: 2.5px; line-height: 1.8;
     white-space: pre-line;              /* 让文案里的换行生效 */
     background: linear-gradient(92deg,#ffd9e4,#ffe9c4 42%,#ffc4d6 76%,#ffd9e4);
     -webkit-background-clip: text; background-clip: text; color: transparent;
-    filter: drop-shadow(0 0 14px rgba(255,170,200,.85));
+    /* 先一圈暗描边把字和发光蛋糕分开，再加粉色辉光 —— 原来只有亮辉光，
+       浅粉字压在亮背景上等于没对比度，这才是"看不清"的主因之一 */
+    filter: drop-shadow(0 1px 2px rgba(0,0,0,.92))
+            drop-shadow(0 0 10px rgba(0,0,0,.78))
+            drop-shadow(0 0 16px rgba(255,170,200,.7));
   }
   .msg-card .mc-cursor {
     display: inline-block; width: 2px; height: 1em; vertical-align: -.13em;
@@ -213,6 +220,9 @@
   #musicBtn:hover { transform: scale(1.1); box-shadow: 0 0 34px rgba(255,107,157,.55); }
 
   /* —— 手机适配 —— */
+  /* 手机这一档原来是 11.5~18px：在 390px 宽的屏幕上，15.5px 的汉字一行只占屏宽
+     约 28%，而且浅粉渐变字直接压在发光的蛋糕上，几乎看不出对比度。
+     这里把字号整体拉大 ~30%，并给每张卡片加半透明深色底衬，保证任何背景上都读得清。*/
   @media (max-width: 640px), (orientation: portrait) and (max-width: 900px) {
     .lock-icon { font-size: 44px; margin-bottom: 16px; }
     .lock-title { font-size: 17px; letter-spacing: 2.5px; }
@@ -226,22 +236,37 @@
     .gate-sub { font-size: 12.5px; letter-spacing: 2px; margin-bottom: 26px; }
     .gate-btn { padding: 13px 28px; font-size: 14px; }
     #subs { bottom: 34px; }
-    #subs .sub-line { font-size: 12.5px; letter-spacing: 2px; }
-    .msg-card { top: 6.5%; max-width: 90vw; }
-    .msg-card .mc-text { font-size: 15.5px; letter-spacing: 1.5px; line-height: 1.8; }
-    .msg-card .mc-icon { font-size: 28px; margin-bottom: 8px; }
-    .msg-card .mc-title { font-size: 11.5px; letter-spacing: 2px; }
-    #wishMsg .mc-text { font-size: 18px; letter-spacing: 2.5px; }
-    #wishMsg .mc-icon { font-size: 38px; }
-    .mc-count { font-size: 34px; margin-top: 12px; }
+    #subs .sub-line { font-size: 15px; letter-spacing: 1.5px; }
+    /* 卡片统一加深色底衬 + 深色描边，不再跟发光蛋糕抢对比度 */
+    .msg-card {
+      top: 5%;
+      width: max-content;
+      max-width: 92vw;
+      padding: 12px 16px;
+      border-radius: 16px;
+      background: rgba(8, 4, 16, .46);
+      backdrop-filter: blur(9px); -webkit-backdrop-filter: blur(9px);
+      border: 1px solid rgba(255, 190, 220, .12);
+    }
+    .msg-card .mc-text {
+      font-size: 20px; font-weight: 700; letter-spacing: 1.5px; line-height: 1.75;
+      filter: drop-shadow(0 1px 2px rgba(0,0,0,.95))
+              drop-shadow(0 0 9px rgba(0,0,0,.82))
+              drop-shadow(0 0 14px rgba(255,170,200,.65));
+    }
+    .msg-card .mc-icon { font-size: 30px; margin-bottom: 8px; }
+    .msg-card .mc-title { font-size: 14px; letter-spacing: 2px; }
+    #wishMsg .mc-text { font-size: 23px; letter-spacing: 2px; }
+    #wishMsg .mc-icon { font-size: 40px; }
+    .mc-count { font-size: 40px; margin-top: 12px; }
     #bigText { max-width: 96vw; }
-    #guessMsg .mc-text { font-size: 15.5px; letter-spacing: 2px; }
-    #guessMsg .mc-icon { font-size: 26px; margin-bottom: 8px; }
-    #yesMsg .mc-text { font-size: 16.5px; letter-spacing: 2px; }
-    #yesMsg .mc-icon { font-size: 28px; margin-bottom: 8px; }
+    #guessMsg .mc-text { font-size: 20px; letter-spacing: 1.5px; }
+    #guessMsg .mc-icon { font-size: 28px; margin-bottom: 8px; }
+    #yesMsg .mc-text { font-size: 21px; letter-spacing: 1.5px; }
+    #yesMsg .mc-icon { font-size: 30px; margin-bottom: 8px; }
     #blessMsg { top: 4%; padding: 14px 18px; max-width: 92vw; }
-    #blessMsg .mc-text { font-size: 13px; letter-spacing: 1px; line-height: 1.9; }
-    #blessMsg .mc-icon { font-size: 22px; margin-bottom: 6px; }
+    #blessMsg .mc-text { font-size: 18px; letter-spacing: 1px; line-height: 1.85; }
+    #blessMsg .mc-icon { font-size: 24px; margin-bottom: 6px; }
   }
 
 </style>
@@ -592,31 +617,46 @@
   }
 
   /* ---------- 压轴祝福流程 ----------
-     窄屏（手机）策略：把长句拆成「短句」，依次单独展示（每次画面只有一行、
-     单行大字，每字 80-190px）→ 不是分行，而是分次，彻底解决手机看不清 */
+     手机屏幕上单行字数越多、每个字分到的像素越少（12 个字时每字只剩约 31px），
+     笔画细到 2px 出头，粒子就撑不出清晰的字形了 —— 这是屏幕宽度的物理上限。
+     所以：整句一次展示（不分行），只有当一句超过 10 个字时，
+     才在标点处断成两拍依次显示（尽量少拆，且绝不拆在句子中间）。*/
+  function splitLongLine(s, limit) {
+    if (s.length <= limit) return [s];
+    // 先按标点切分，再把过短的片段并回去 → 断点永远落在标点上
+    const raw = [];
+    let cur = '';
+    for (const ch of s) {
+      cur += ch;
+      if ('，。！？、；：'.indexOf(ch) >= 0) { raw.push(cur); cur = ''; }
+    }
+    if (cur) raw.push(cur);
+    const merged = [];
+    let acc = '';
+    for (const seg of raw) {
+      if (acc && (acc.length + seg.length) > limit) { merged.push(acc); acc = seg; }
+      else acc += seg;
+    }
+    if (acc) merged.push(acc);
+    // 万一仍有超长片段（整句没标点），才按字数均分
+    const out = [];
+    for (const seg of merged) {
+      if (seg.length <= limit) { out.push(seg); continue; }
+      const n = Math.ceil(seg.length / limit);
+      const per = Math.ceil(seg.length / n);
+      for (let i = 0; i < seg.length; i += per) out.push(seg.slice(i, i + per));
+    }
+    return out;
+  }
+
   function startBlessFlow() {
     const narrow = window.innerWidth < 700;
-    const MAX = 5;
+    const LIMIT = 10;                   // 手机上单行最多 10 个字
     const queue = [];
     for (const lines of BLESS_LINES) {
       const full = lines.join('');
-      if (narrow && full.length > MAX) {
-        const segs = [];
-        let cur = '';
-        for (const ch of full) {
-          cur += ch;
-          if ('，。！？、；：'.indexOf(ch) >= 0) { segs.push(cur); cur = ''; }
-        }
-        if (cur) segs.push(cur);
-        for (const seg of segs) {
-          if (seg.length <= MAX) {
-            queue.push(seg);
-          } else {
-            const n = Math.ceil(seg.length / MAX);
-            const per = Math.ceil(seg.length / n);
-            for (let i = 0; i < seg.length; i += per) queue.push(seg.slice(i, i + per));
-          }
-        }
+      if (narrow) {
+        for (const piece of splitLongLine(full, LIMIT)) queue.push(piece);
       } else {
         queue.push(full);
       }
@@ -648,6 +688,15 @@
     startMusic();
     subsEl.classList.add('show');
 
+    // 触发 555 的粒子聚合动画（它监听 window 的 click/touchstart）
+    // 注意：必须放在 fastbless 提前返回之前，否则快速预览时 3D 场景不会启动，
+    // 渲染循环会一直停在 PRE 阶段，粒子文字永远不动。
+    try {
+      window.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    } catch (e) {
+      try { window.dispatchEvent(new Event('click')); } catch (e2) {}
+    }
+
     // 快速预览：?fastbless=1 → 直接跳到最后的祝福句（用于验证清晰度）
     if (params.has('fastbless')) {
       setTimeout(startBlessFlow, 1200);
@@ -667,13 +716,6 @@
       typeInto($('yesLine'), $('yesCursor'), YES_TEXT, 110);
     }, 13000);
     setTimeout(function () { hideCard(yesMsg); clearAllTypers(); }, 18800);
-
-    // 触发 555 的粒子聚合动画（它监听 window 的 click/touchstart）
-    try {
-      window.dispatchEvent(new MouseEvent('click', { bubbles: true }));
-    } catch (e) {
-      try { window.dispatchEvent(new Event('click')); } catch (e2) {}
-    }
 
     // 探测蛋糕成型时刻（555 在 DONE 阶段输出 log「星辰」）
     // 但"许愿"要等「没错，今天是属于你的生日！」说完再开始（约 20s）
@@ -1445,9 +1487,11 @@ camera.position.set(3.2 * __camK, 2.4 * __camK, 5.2 * __camK);
             c.width = c.height = s;
             const g = c.getContext('2d');
             const grd = g.createRadialGradient(s / 2, s / 2, 0, s / 2, s / 2, s / 2);
+            // 硬芯 + 薄柔边：点径已经缩小到≈采样间距，必须让点的可视核心足够实，
+            // 否则笔画会变细变暗。柔边只保留一点点做辉光。
             grd.addColorStop(0, 'rgba(255,255,255,1)');
-            grd.addColorStop(0.5, 'rgba(255,255,255,1)');      // 核心更实 → 粒子更亮
-            grd.addColorStop(0.78, 'rgba(255,255,255,0.55)');
+            grd.addColorStop(0.62, 'rgba(255,255,255,1)');
+            grd.addColorStop(0.86, 'rgba(255,255,255,0.6)');
             grd.addColorStop(1, 'rgba(255,255,255,0)');
             g.fillStyle = grd;
             g.fillRect(0, 0, s, s);
@@ -1465,7 +1509,7 @@ camera.position.set(3.2 * __camK, 2.4 * __camK, 5.2 * __camK);
         function buildBurstFor(lines) {
             disposeHappy();
 
-            const CW = 1024;
+            const CW = 2048;      // 源画布分辨率（原 1024）。分辨率不够就无法把采样间距压到 1px
             const c = document.createElement('canvas');
             const g = c.getContext('2d');
 
@@ -1480,7 +1524,7 @@ camera.position.set(3.2 * __camK, 2.4 * __camK, 5.2 * __camK);
             g.fillStyle = '#fff';
             g.textAlign = 'center';
             g.textBaseline = 'middle';
-            const fsMax = latin ? 210 : 250;          // 字号上限提高 → 字更大
+            const fsMax = latin ? CW * 0.205 : CW * 0.244;   // 字号上限随画布分辨率等比放大
             g.font = fontOf(fsMax);
             let maxW = 0;
             lines.forEach(function (ln) { maxW = Math.max(maxW, g.measureText(ln).width); });
@@ -1495,8 +1539,12 @@ camera.position.set(3.2 * __camK, 2.4 * __camK, 5.2 * __camK);
             g.strokeStyle = '#fff';
             g.lineJoin = 'round';
             g.lineCap = 'round';
-            // 描边大幅增粗（+18%）→ 手机上笔画从 5px 增至约 6.5px，容纳更多采样点
-            g.lineWidth = Math.max(6, fs * 0.18);
+            // ★★ 这是"文字糊成实心方块"的真正元凶。
+            //    lineWidth = fs * 0.18 意味着描边宽度是"字号的 18%"，也就是向字形
+            //    四周各外扩 9% 字号；而汉字笔画本身只有约 8% 字号宽 —— 于是笔画内
+            //    的空隙（counter）被彻底填满，相邻字也粘在一起，整行变成实心白条。
+            //    只有 3% 的轻描边：略微加粗笔画、减少采样空隙，又不会吃掉字形细节。
+            g.lineWidth = Math.max(2, fs * 0.03);
             g.textAlign = 'center';
             g.textBaseline = 'middle';
             g.font = fontOf(fs);
@@ -1515,15 +1563,18 @@ camera.position.set(3.2 * __camK, 2.4 * __camK, 5.2 * __camK);
             const textW = Math.min(9.0, visW * 0.96);
             const textH = textW * (CH / CW);
 
-            // 自适应采样：手机上文字只有 ~53px/字，必须把采样间距压到 1.2px
-            // 才有足够多的点勾勒笔画（配合描边增粗 + 定点尺寸）
+            // ★ 清晰度的关键：点径必须 ≈ 采样间距。
+            //   之前设成 spacing × 2.2，点与点重叠两倍多，字形内部的空隙被填满，
+            //   整行熔成一条实心白带 → 手机上完全认不出字。
+            //   现在：采样间距压到约 1 CSS px（靠 CW=2048 的分辨率支撑），
+            //   点径只比间距大 10%，点刚好相接 → 笔画连续、字形边界清晰。
             const screenW = window.innerWidth || 1280;
-            const textPx = screenW * 1.0;
-            const targetSpacingPx = screenW > 900 ? 2.6 : 1.2;
-            const gap = Math.max(2, Math.min(10, Math.round(CW * targetSpacingPx / textPx)));
+            const isNarrow = screenW <= 900;
+            const textPx = screenW * 0.96;
+            const targetSpacingPx = isNarrow ? 0.8 : 2.0;
+            const gap = Math.max(2, Math.round(CW * targetSpacingPx / textPx));
             const spacing = textW * gap / CW;
-            // 点径约 = 笔画宽的 40%（手机笔画 6.5px → 点 2.6px），既不糊又能填实笔画
-            const baseSize = spacing * (screenW > 900 ? 1.5 : 2.2);
+            const baseSize = spacing * 1.1;
             const targets = [];
             for (let y = 0; y < CH; y += gap) {
                 for (let x = 0; x < CW; x += gap) {
@@ -1636,7 +1687,7 @@ camera.position.set(3.2 * __camK, 2.4 * __camK, 5.2 * __camK);
                 attachHappyToCamera();
                 __hbPhase = 2.5;
                 __hbT0 = (performance.now() - animStartTime) / 1000;
-                if (bloomPass) bloomPass.strength = 0.42;
+                if (bloomPass) bloomPass.strength = 0.3;   // 泛光压低：辉光会把相邻的点糊成一片
                 return;
             }
 
@@ -1660,7 +1711,7 @@ camera.position.set(3.2 * __camK, 2.4 * __camK, 5.2 * __camK);
             __hbPhase = 1;
             __hbT0 = (performance.now() - animStartTime) / 1000;
             // 文字展示时让蛋糕保持全亮（文字靠自身高对比度清晰）
-            if (bloomPass) bloomPass.strength = 0.42;
+            if (bloomPass) bloomPass.strength = 0.3;   // 泛光压低：辉光会把相邻的点糊成一片
         };
 
         // 手动让粒子文字退场（叠加层在替换为清晰文本时调用）
@@ -1701,7 +1752,7 @@ camera.position.set(3.2 * __camK, 2.4 * __camK, 5.2 * __camK);
                     pos[i * 3 + 2] += dz * 0.085;
                     if (Math.abs(dx) > 0.03 || Math.abs(dy) > 0.03) settled = false;
                 }
-                if (settled || el > 2.6) __hbPhase = 3;
+                if (settled || el > 3.4) __hbPhase = 3;
             } else if (__hbPhase === 2.5) {
                 // 淡入（约 0.9s）
                 h.mat.opacity = Math.min(1, el / 0.9);
