@@ -135,7 +135,28 @@
   @keyframes cursorBlink { 50% { opacity: 0; } }
   .msg-card.done .mc-title { opacity: 1; }
 
-  /* 聚合过程中的悬念文案（空旷的上方，可稍醒目）*/
+  /* ===== 大屏清晰文本（粒子成型后替换显示，保证可读性）===== */
+  #bigText {
+    position: fixed; left: 50%; top: 21%; z-index: 36;
+    transform: translate(-50%, -50%);
+    opacity: 0; pointer-events: none; text-align: center;
+    max-width: 94vw;
+    font-family: "Microsoft YaHei","PingFang SC",sans-serif;
+    transition: opacity .55s ease;
+  }
+  #bigText.show { opacity: 1; }
+  #bigText .line {
+    /* 字号由 JS 动态计算，以与粒子文字完全一致 */
+    font-weight: 700; letter-spacing: 0; line-height: 1.16;
+    color: #fff;
+    text-shadow:
+      0 0 14px rgba(255,200,230,.95),
+      0 0 34px rgba(255,150,205,.75),
+      0 0 70px rgba(205,130,255,.45);
+  }
+  #bigText .line + .line { margin-top: 0; }
+
+  /* ===== 聚合过程中的悬念文案（空旷的上方，可稍醒目）*/
   #guessMsg .mc-text { font-size: 20px; letter-spacing: 3px; }
   #guessMsg .mc-icon { font-size: 34px; margin-bottom: 10px; animation: wishCandle 3.4s ease-in-out infinite; }
 
@@ -213,6 +234,7 @@
     #wishMsg .mc-text { font-size: 18px; letter-spacing: 2.5px; }
     #wishMsg .mc-icon { font-size: 38px; }
     .mc-count { font-size: 34px; margin-top: 12px; }
+    #bigText { max-width: 96vw; }
     #guessMsg .mc-text { font-size: 15.5px; letter-spacing: 2px; }
     #guessMsg .mc-icon { font-size: 26px; margin-bottom: 8px; }
     #yesMsg .mc-text { font-size: 16.5px; letter-spacing: 2px; }
@@ -310,6 +332,9 @@
   <div class="mc-text"><span id="blessLine"></span><span class="mc-cursor" id="blessCursor" style="display:none"></span></div>
 </div>
 
+<!-- 大屏清晰文本（粒子成型后替换，保证任何屏幕都看得清）-->
+<div id="bigText"></div>
+
 <!-- 音乐控件 -->
 <button id="musicBtn" title="背景音乐开关">🔈</button>
 <audio id="bgm" src="./333.mp3" loop preload="auto" playsinline webkit-playsinline></audio>
@@ -364,6 +389,7 @@
   const UNLOCK_DATE = new Date('2026-09-25T00:00:00');
 
   /* ---------- 元素 ---------- */
+  const params = new URLSearchParams(location.search);
   const $ = function (id) { return document.getElementById(id); };
   const lockEl = $('lock');
   const gateEl = $('gate');
@@ -420,6 +446,38 @@
   function clearAllTypers() {
     timers.forEach(function (t) { clearInterval(t); });
     timers.length = 0;
+  }
+
+  /* ---------- 大屏清晰文本（与粒子文字尺寸/位置完全一致 → 无缝替换）---------- */
+  const bigTextEl = document.getElementById('bigText');
+  function showBigText(fallbackLines) {
+    const meta = window.__BURST_META__;
+    const lines = (meta && meta.lines && meta.lines.length) ? meta.lines : fallbackLines;
+
+    let fontSize = 44;          // 兜底字号
+    let topPx = window.innerHeight * 0.21;
+    let useExact = false;
+
+    if (meta && meta.textW && meta.maxChars && meta.visH) {
+      // 世界单位 → 屏幕 CSS 像素 的换算比例
+      const scale = window.innerHeight / meta.visH;
+      // 单个字符的世界宽度（中文字宽 ≈ 字号）
+      const charW = meta.textW / meta.maxChars;
+      fontSize = charW * scale * 1.0;                 // 与粒子字宽一致
+      topPx = window.innerHeight / 2 - meta.cyOffset * scale;   // 与粒子中心对齐
+      useExact = true;
+    }
+
+    bigTextEl.innerHTML = lines.map(function (l) {
+      return '<div class="line" style="font-size:' + fontSize.toFixed(1) + 'px;line-height:1.16">'
+        + l + '</div>';
+    }).join('');
+    bigTextEl.style.top = topPx.toFixed(1) + 'px';
+    bigTextEl.classList.add('show');
+    return useExact;
+  }
+  function hideBigText() {
+    bigTextEl.classList.remove('show');
   }
 
   /* ---------- 许愿倒计时（3 秒）---------- */
@@ -529,22 +587,25 @@
       });
     }, 28700);
 
-    // ⑤ 压轴祝福：前 4 句「淡入 → 停留 3.6s → 淡出」，最后一句「💥爆炸 → 永久定格」
-    setTimeout(function () {
-      let idx = 0;
-      (function nextBless() {
-        if (idx >= BLESS_LINES.length) return;          // 演完即定格，不再循环
-        const lines = BLESS_LINES[idx++];
-        const isLast = idx >= BLESS_LINES.length;
-        if (window.__PARTICLE_BURST__) {
-          window.__PARTICLE_BURST__(
-            lines,
-            isLast ? { mode: 'burst', keep: true } : { mode: 'fade', hold: 3.6 }
-          );
-        }
-        if (!isLast) setTimeout(nextBless, 5400);
-      })();
-    }, 36900);
+    // ⑤ 压轴祝福：粒子负责视觉冲击，成型后换成清晰文本供阅读
+    setTimeout(startBlessFlow, 36900);
+  }
+
+  /* ---------- 压轴祝福流程（纯粒子文字，可被快速预览参数触发）---------- */
+  function startBlessFlow() {
+    let idx = 0;
+    (function nextBless() {
+      if (idx >= BLESS_LINES.length) return;          // 演完即定格，不再循环
+      const lines = BLESS_LINES[idx++];
+      const isLast = idx >= BLESS_LINES.length;
+      if (window.__PARTICLE_BURST__) {
+        window.__PARTICLE_BURST__(
+          lines,
+          isLast ? { mode: 'burst', keep: true } : { mode: 'fade', hold: 3.6 }
+        );
+      }
+      if (!isLast) setTimeout(nextBless, 5400);
+    })();
   }
 
   /* ---------- 点击「点亮你的蜡烛」进入 ---------- */
@@ -557,6 +618,12 @@
 
     startMusic();
     subsEl.classList.add('show');
+
+    // 快速预览：?fastbless=1 → 直接跳到最后的祝福句（用于验证清晰度）
+    if (params.has('fastbless')) {
+      setTimeout(startBlessFlow, 1200);
+      return;
+    }
 
     // 蛋糕形成过程中：先抛出悬念（聚合已延长到 ~16.6s）
     setTimeout(function () {
@@ -601,7 +668,7 @@
   });
 
   /* ---------- 时间锁 ---------- */
-  const PREVIEW = new URLSearchParams(location.search).has('preview');
+  const PREVIEW = params.has('preview');
   let lockTimer = null;
 
   function unlockNow() {
@@ -1369,6 +1436,35 @@ camera.position.set(3.2 * __camK, 2.4 * __camK, 5.2 * __camK);
         function buildBurstFor(lines) {
             disposeHappy();
 
+            // 窄屏（手机~390px）：单行放不下太多字 → 每字过小必然模糊
+            // 策略：按标点优先拆分，且每行最多 5 字（每字可达 75-120px，笔画才清楚）
+            if (window.innerWidth < 700) {
+                const MAX_PER_LINE = 5;
+                const out = [];
+                for (const ln of lines) {
+                    if (ln.length <= MAX_PER_LINE) { out.push(ln); continue; }
+                    // ① 按标点分段（标点跟随前文）
+                    const segs = [];
+                    let cur = '';
+                    for (const ch of ln) {
+                        cur += ch;
+                        if ('，。！？、；：'.indexOf(ch) >= 0) { segs.push(cur); cur = ''; }
+                    }
+                    if (cur) segs.push(cur);
+                    // ② 每段再按字数均分
+                    for (const seg of segs) {
+                        if (seg.length <= MAX_PER_LINE) {
+                            out.push(seg);
+                        } else {
+                            const n = Math.ceil(seg.length / MAX_PER_LINE);
+                            const per = Math.ceil(seg.length / n);
+                            for (let i = 0; i < seg.length; i += per) out.push(seg.slice(i, i + per));
+                        }
+                    }
+                }
+                lines = out;
+            }
+
             const CW = 1024;
             const c = document.createElement('canvas');
             const g = c.getContext('2d');
@@ -1384,10 +1480,11 @@ camera.position.set(3.2 * __camK, 2.4 * __camK, 5.2 * __camK);
             g.fillStyle = '#fff';
             g.textAlign = 'center';
             g.textBaseline = 'middle';
-            g.font = fontOf(170);
+            const fsMax = latin ? 210 : 250;          // 字号上限提高 → 字更大
+            g.font = fontOf(fsMax);
             let maxW = 0;
             lines.forEach(function (ln) { maxW = Math.max(maxW, g.measureText(ln).width); });
-            const fs = Math.min(latin ? 170 : 150, (latin ? 170 : 150) * (CW * 0.92) / maxW);
+            const fs = Math.min(fsMax, fsMax * (CW * 0.92) / maxW);
             const lineH = fs * 1.16;
             const blockH = lines.length * lineH;
             // ② 按文字实际高度设定画布（紧凑无多余空白 → 世界尺寸不被虚高撑大）
@@ -1428,6 +1525,22 @@ camera.position.set(3.2 * __camK, 2.4 * __camK, 5.2 * __camK);
                     }
                 }
             }
+
+            // 暴露文字元数据 → 供前端生成"完全对齐"的清晰文本（无缝替换）
+            let maxChars = 0;
+            lines.forEach(function (l) { maxChars = Math.max(maxChars, l.length); });
+            window.__BURST_META__ = {
+                lines: lines.slice(),
+                textW: textW,
+                textH: textH,
+                maxChars: maxChars,
+                visH: visH,
+                cyOffset: HB_CY,
+                fs: fs,
+                CW: CW,
+                CH: CH,
+                lineCount: lines.length,
+            };
             const N = targets.length;
             const pos = new Float32Array(N * 3);
             const col = new Float32Array(N * 3);
@@ -1489,7 +1602,6 @@ camera.position.set(3.2 * __camK, 2.4 * __camK, 5.2 * __camK);
             h.points.quaternion.copy(camera.quaternion);
         }
 
-        // 触发一次文字爆炸
         window.__PARTICLE_BURST__ = function (lines, opts) {
             opts = opts || {};
             buildBurstFor(Array.isArray(lines) ? lines : [String(lines)]);
@@ -1536,9 +1648,14 @@ camera.position.set(3.2 * __camK, 2.4 * __camK, 5.2 * __camK);
             attachHappyToCamera();
             __hbPhase = 1;
             __hbT0 = (performance.now() - animStartTime) / 1000;
-            // 蛋糕保持全亮（文字靠自身高对比度清晰，不靠压暗蛋糕）
-            // Bloom 只轻微压低：既避免糊文字，又让蛋糕保留光晕
+            // 文字展示时让蛋糕保持全亮（文字靠自身高对比度清晰）
             if (bloomPass) bloomPass.strength = 0.42;
+        };
+
+        // 手动让粒子文字退场（叠加层在替换为清晰文本时调用）
+        window.__HIDE_BURST__ = function () {
+            if (!__hb || __hbPhase === 0) return;
+            __hbPhase = 4;
         };
 
         function updateHappyBurst(tSec) {
