@@ -389,6 +389,7 @@
   const UNLOCK_DATE = new Date('2026-09-25T00:00:00');
 
   /* ---------- 元素 ---------- */
+  const params = new URLSearchParams(location.search);
   const $ = function (id) { return document.getElementById(id); };
   const lockEl = $('lock');
   const gateEl = $('gate');
@@ -566,31 +567,34 @@
       });
     }, 28700);
 
-    // ⑤ 压轴祝福：粒子负责视觉冲击（爆炸 / 淡入），成型后换成清晰文本供阅读
-    setTimeout(function () {
-      let idx = 0;
-      (function nextBless() {
-        if (idx >= BLESS_LINES.length) return;          // 演完即定格，不再循环
-        const lines = BLESS_LINES[idx++];
-        const isLast = idx >= BLESS_LINES.length;
+    // ⑤ 压轴祝福：粒子负责视觉冲击，成型后换成清晰文本供阅读
+    setTimeout(startBlessFlow, 36900);
+  }
 
-        if (isLast) {
-          // 最后一句：粒子爆炸 → 短暂停留 → 淡出，随后由清晰文本永久定格
-          if (window.__PARTICLE_BURST__) window.__PARTICLE_BURST__(lines, { mode: 'burst', hold: 2.2 });
-          setTimeout(function () { showBigText(lines); }, 2400);
-          return;
-        }
+  /* ---------- 压轴祝福流程（可被快速预览参数直接触发）---------- */
+  function startBlessFlow() {
+    let idx = 0;
+    (function nextBless() {
+      if (idx >= BLESS_LINES.length) return;          // 演完即定格，不再循环
+      const lines = BLESS_LINES[idx++];
+      const isLast = idx >= BLESS_LINES.length;
 
-        // 前 4 句：粒子淡入 → 粒子淡出 + 清晰文本淡入 → 停留 3.4s → 文本淡出
-        if (window.__PARTICLE_BURST__) window.__PARTICLE_BURST__(lines, { mode: 'fade', hold: 1.6 });
-        setTimeout(function () {
-          if (window.__HIDE_BURST__) window.__HIDE_BURST__();   // 粒子退场
-          showBigText(lines);                                    // 清晰文本登场
-        }, 1500);
-        setTimeout(hideBigText, 4900);
-        setTimeout(nextBless, 5600);
-      })();
-    }, 36900);
+      if (isLast) {
+        // 最后一句：粒子爆炸 → 短暂停留 → 淡出，随后由清晰文本永久定格
+        if (window.__PARTICLE_BURST__) window.__PARTICLE_BURST__(lines, { mode: 'burst', hold: 2.2 });
+        setTimeout(function () { showBigText(lines); }, 2400);
+        return;
+      }
+
+      // 前 4 句：粒子淡入 → 粒子淡出 + 清晰文本淡入 → 停留 3.4s → 文本淡出
+      if (window.__PARTICLE_BURST__) window.__PARTICLE_BURST__(lines, { mode: 'fade', hold: 1.6 });
+      setTimeout(function () {
+        if (window.__HIDE_BURST__) window.__HIDE_BURST__();   // 粒子退场
+        showBigText(lines);                                    // 清晰文本登场
+      }, 1500);
+      setTimeout(hideBigText, 4900);
+      setTimeout(nextBless, 5600);
+    })();
   }
 
   /* ---------- 点击「点亮你的蜡烛」进入 ---------- */
@@ -603,6 +607,12 @@
 
     startMusic();
     subsEl.classList.add('show');
+
+    // 快速预览：?fastbless=1 → 直接跳到最后的祝福句（用于验证清晰度）
+    if (params.has('fastbless')) {
+      setTimeout(startBlessFlow, 1200);
+      return;
+    }
 
     // 蛋糕形成过程中：先抛出悬念（聚合已延长到 ~16.6s）
     setTimeout(function () {
@@ -647,7 +657,7 @@
   });
 
   /* ---------- 时间锁 ---------- */
-  const PREVIEW = new URLSearchParams(location.search).has('preview');
+  const PREVIEW = params.has('preview');
   let lockTimer = null;
 
   function unlockNow() {
