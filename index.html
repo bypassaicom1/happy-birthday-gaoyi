@@ -1436,35 +1436,6 @@ camera.position.set(3.2 * __camK, 2.4 * __camK, 5.2 * __camK);
         function buildBurstFor(lines) {
             disposeHappy();
 
-            // 窄屏（手机~390px）：单行放不下太多字 → 每字过小必然模糊
-            // 策略：按标点优先拆分，且每行最多 5 字（每字可达 75-120px，笔画才清楚）
-            if (window.innerWidth < 700) {
-                const MAX_PER_LINE = 5;
-                const out = [];
-                for (const ln of lines) {
-                    if (ln.length <= MAX_PER_LINE) { out.push(ln); continue; }
-                    // ① 按标点分段（标点跟随前文）
-                    const segs = [];
-                    let cur = '';
-                    for (const ch of ln) {
-                        cur += ch;
-                        if ('，。！？、；：'.indexOf(ch) >= 0) { segs.push(cur); cur = ''; }
-                    }
-                    if (cur) segs.push(cur);
-                    // ② 每段再按字数均分
-                    for (const seg of segs) {
-                        if (seg.length <= MAX_PER_LINE) {
-                            out.push(seg);
-                        } else {
-                            const n = Math.ceil(seg.length / MAX_PER_LINE);
-                            const per = Math.ceil(seg.length / n);
-                            for (let i = 0; i < seg.length; i += per) out.push(seg.slice(i, i + per));
-                        }
-                    }
-                }
-                lines = out;
-            }
-
             const CW = 1024;
             const c = document.createElement('canvas');
             const g = c.getContext('2d');
