@@ -591,29 +591,20 @@
     setTimeout(startBlessFlow, 36900);
   }
 
-  /* ---------- 压轴祝福流程（可被快速预览参数直接触发）---------- */
+  /* ---------- 压轴祝福流程（纯粒子文字，可被快速预览参数触发）---------- */
   function startBlessFlow() {
     let idx = 0;
     (function nextBless() {
       if (idx >= BLESS_LINES.length) return;          // 演完即定格，不再循环
       const lines = BLESS_LINES[idx++];
       const isLast = idx >= BLESS_LINES.length;
-
-      if (isLast) {
-        // 最后一句：粒子爆炸 → 短暂停留 → 淡出，随后由清晰文本永久定格
-        if (window.__PARTICLE_BURST__) window.__PARTICLE_BURST__(lines, { mode: 'burst', hold: 2.2 });
-        setTimeout(function () { showBigText(lines); }, 2400);
-        return;
+      if (window.__PARTICLE_BURST__) {
+        window.__PARTICLE_BURST__(
+          lines,
+          isLast ? { mode: 'burst', keep: true } : { mode: 'fade', hold: 3.6 }
+        );
       }
-
-      // 前 4 句：粒子淡入 → 粒子淡出 + 清晰文本淡入 → 停留 3.4s → 文本淡出
-      if (window.__PARTICLE_BURST__) window.__PARTICLE_BURST__(lines, { mode: 'fade', hold: 1.6 });
-      setTimeout(function () {
-        if (window.__HIDE_BURST__) window.__HIDE_BURST__();   // 粒子退场
-        showBigText(lines);                                    // 清晰文本登场
-      }, 1500);
-      setTimeout(hideBigText, 4900);
-      setTimeout(nextBless, 5600);
+      if (!isLast) setTimeout(nextBless, 5400);
     })();
   }
 
