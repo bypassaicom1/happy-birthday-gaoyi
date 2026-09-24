@@ -146,14 +146,15 @@
   }
   #bigText.show { opacity: 1; }
   #bigText .line {
-    font-size: 48px; font-weight: 700; letter-spacing: 5px; line-height: 1.42;
+    /* 字号由 JS 动态计算，以与粒子文字完全一致 */
+    font-weight: 700; letter-spacing: 0; line-height: 1.16;
     color: #fff;
     text-shadow:
-      0 0 16px rgba(255,190,225,.95),
-      0 0 40px rgba(255,140,200,.78),
-      0 0 84px rgba(200,120,255,.5);
+      0 0 14px rgba(255,200,230,.95),
+      0 0 34px rgba(255,150,205,.75),
+      0 0 70px rgba(205,130,255,.45);
   }
-  #bigText .line + .line { margin-top: 4px; }
+  #bigText .line + .line { margin-top: 0; }
 
   /* ===== 聚合过程中的悬念文案（空旷的上方，可稍醒目）*/
   #guessMsg .mc-text { font-size: 20px; letter-spacing: 3px; }
@@ -233,8 +234,7 @@
     #wishMsg .mc-text { font-size: 18px; letter-spacing: 2.5px; }
     #wishMsg .mc-icon { font-size: 38px; }
     .mc-count { font-size: 34px; margin-top: 12px; }
-    #bigText { top: 18%; max-width: 96vw; }
-    #bigText .line { font-size: 34px; letter-spacing: 3px; line-height: 1.4; }
+    #bigText { max-width: 96vw; }
     #guessMsg .mc-text { font-size: 15.5px; letter-spacing: 2px; }
     #guessMsg .mc-icon { font-size: 26px; margin-bottom: 8px; }
     #yesMsg .mc-text { font-size: 16.5px; letter-spacing: 2px; }
@@ -448,13 +448,33 @@
     timers.length = 0;
   }
 
-  /* ---------- 大屏清晰文本（粒子成型后替换显示）---------- */
+  /* ---------- 大屏清晰文本（与粒子文字尺寸/位置完全一致 → 无缝替换）---------- */
   const bigTextEl = document.getElementById('bigText');
-  function showBigText(lines) {
+  function showBigText(fallbackLines) {
+    const meta = window.__BURST_META__;
+    const lines = (meta && meta.lines && meta.lines.length) ? meta.lines : fallbackLines;
+
+    let fontSize = 44;          // 兜底字号
+    let topPx = window.innerHeight * 0.21;
+    let useExact = false;
+
+    if (meta && meta.textW && meta.maxChars && meta.visH) {
+      // 世界单位 → 屏幕 CSS 像素 的换算比例
+      const scale = window.innerHeight / meta.visH;
+      // 单个字符的世界宽度（中文字宽 ≈ 字号）
+      const charW = meta.textW / meta.maxChars;
+      fontSize = charW * scale * 1.0;                 // 与粒子字宽一致
+      topPx = window.innerHeight / 2 - meta.cyOffset * scale;   // 与粒子中心对齐
+      useExact = true;
+    }
+
     bigTextEl.innerHTML = lines.map(function (l) {
-      return '<div class="line">' + l + '</div>';
+      return '<div class="line" style="font-size:' + fontSize.toFixed(1) + 'px;line-height:1.16">'
+        + l + '</div>';
     }).join('');
+    bigTextEl.style.top = topPx.toFixed(1) + 'px';
     bigTextEl.classList.add('show');
+    return useExact;
   }
   function hideBigText() {
     bigTextEl.classList.remove('show');
@@ -1511,6 +1531,22 @@ camera.position.set(3.2 * __camK, 2.4 * __camK, 5.2 * __camK);
                     }
                 }
             }
+
+            // 暴露文字元数据 → 供前端生成"完全对齐"的清晰文本（无缝替换）
+            let maxChars = 0;
+            lines.forEach(function (l) { maxChars = Math.max(maxChars, l.length); });
+            window.__BURST_META__ = {
+                lines: lines.slice(),
+                textW: textW,
+                textH: textH,
+                maxChars: maxChars,
+                visH: visH,
+                cyOffset: HB_CY,
+                fs: fs,
+                CW: CW,
+                CH: CH,
+                lineCount: lines.length,
+            };
             const N = targets.length;
             const pos = new Float32Array(N * 3);
             const col = new Float32Array(N * 3);
